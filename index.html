@@ -2947,7 +2947,19 @@ if (window.location.hash === '#admin') {
 }
 
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('sw.js');
+  // Only an update (not the first install) has a controller at load time.
+  const _hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js').then(reg => {
+    // Check for a newer service worker whenever the page loads.
+    reg.update();
+  }).catch(() => {});
+  // When a new service worker takes control, reload once to load fresh content.
+  let _swReloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!_hadController || _swReloaded) return;
+    _swReloaded = true;
+    window.location.reload();
+  });
 }
 </script>
 
