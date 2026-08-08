@@ -907,7 +907,7 @@ const DEFAULT_PRODUCTS = [
 
 function getConfig(){try{return{...DEFAULT_CONFIG,...JSON.parse(localStorage.getItem('ac_config')||'{}')};}catch(e){return{...DEFAULT_CONFIG};}}
 function saveConfig(cfg){localStorage.setItem('ac_config',JSON.stringify(cfg));}
-function getProducts(){try{const s=JSON.parse(localStorage.getItem('ac_products'));return s&&s.length?s:[...DEFAULT_PRODUCTS];}catch(e){return[...DEFAULT_PRODUCTS];}}
+function getProducts(){try{const raw=localStorage.getItem('ac_products');if(raw===null)return[...DEFAULT_PRODUCTS];const s=JSON.parse(raw);return Array.isArray(s)?s:[...DEFAULT_PRODUCTS];}catch(e){return[...DEFAULT_PRODUCTS];}}
 function saveProducts(p){localStorage.setItem('ac_products',JSON.stringify(p));}
 
 let config = getConfig();
