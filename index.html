@@ -5,13 +5,22 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Amazonia Concrete | Piezas artesanales en concreto</title>
   <meta name="description" content="Piezas artesanales en concreto hechas a mano en Colombia. Mini macetas, bandejas, posavasos, jarrones y accesorios decorativos únicos para tu hogar.">
+  <link rel="canonical" href="https://amazoniac.github.io/CatalogoAmazoniaConcrete/">
+  <meta name="robots" content="index, follow">
+  <meta property="og:site_name" content="Amazonia Concrete">
+  <meta property="og:locale" content="es_CO">
   <meta property="og:title" content="Amazonia Concrete | Piezas artesanales en concreto">
   <meta property="og:description" content="Piezas únicas elaboradas artesanalmente con concreto y materiales naturales. Hechas a mano en Medellín, Colombia.">
   <meta property="og:type" content="website">
-  <meta property="og:image" content="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 630'><rect width='1200' height='630' fill='%23e8e4de'/><text x='600' y='280' text-anchor='middle' font-family='sans-serif' font-size='72' font-weight='300' fill='%233d4a35' letter-spacing='8'>AMAZONIA</text><text x='600' y='360' text-anchor='middle' font-family='sans-serif' font-size='28' fill='%236b6560' letter-spacing='12'>CONCRETE</text></svg>">
+  <meta property="og:url" content="https://amazoniac.github.io/CatalogoAmazoniaConcrete/">
+  <meta property="og:image" content="https://amazoniac.github.io/CatalogoAmazoniaConcrete/og-image.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Amazonia Concrete - Piezas artesanales en concreto">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Amazonia Concrete | Piezas artesanales en concreto">
   <meta name="twitter:description" content="Piezas únicas elaboradas artesanalmente con concreto y materiales naturales. Hechas a mano en Medellín, Colombia.">
+  <meta name="twitter:image" content="https://amazoniac.github.io/CatalogoAmazoniaConcrete/og-image.png">
   <meta name="theme-color" content="#3d4a35">
   <link rel="manifest" href="manifest.json">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -2696,7 +2705,7 @@ function updateStructuredData() {
     name: config.storeName || 'Amazonia Concrete',
     description: config.heroDesc || 'Piezas artesanales en concreto hechas a mano en Colombia',
     url: baseUrl,
-    image: config.logo || baseUrl,
+    image: new URL('og-image.png', baseUrl).href,
     address: { '@type': 'PostalAddress', addressLocality: config.location || 'Medellín, Colombia' },
     telephone: config.whatsapp || '',
     email: config.email || '',
@@ -2740,7 +2749,9 @@ function updateOGTags() {
   setMeta('og:description', desc);
   setMeta('twitter:title', title);
   setMeta('twitter:description', desc);
-  if (config.logo) { setMeta('og:image', config.logo); }
+  // og:image se mantiene como la imagen raster estatica (og-image.png).
+  // Los data-URI (como el logo base64) no funcionan como og:image en
+  // WhatsApp/Facebook, por eso NO se sobrescribe aqui.
   document.title = title;
 }
 
