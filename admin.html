@@ -261,9 +261,9 @@
     <div id="publish-banner" style="display:none;background:#b87355;color:#fff;padding:.75rem 1.5rem;border-radius:6px;margin-bottom:1.5rem;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;box-shadow:0 2px 12px rgba(184,115,85,0.3);">
       <div style="display:flex;align-items:center;gap:8px;">
         <i class="ti ti-alert-circle" style="font-size:20px;"></i>
-        <span style="font-size:13px;letter-spacing:1px;"><strong>Tienes cambios sin publicar.</strong> Descarga el archivo <code>data.json</code> y subelo a tu repositorio para que tus clientes vean los cambios.</span>
+        <span style="font-size:13px;letter-spacing:1px;"><strong>Tienes cambios sin publicar.</strong> Publica para que tus clientes vean los cambios.</span>
       </div>
-      <button class="btn" style="background:#fff;color:#b87355;font-weight:600;white-space:nowrap;" onclick="publishData()"><i class="ti ti-cloud-upload"></i> PUBLICAR CAMBIOS</button>
+      <button class="btn" style="background:#fff;color:#b87355;font-weight:600;white-space:nowrap;" onclick="showAdminPage('publish')"><i class="ti ti-cloud-upload"></i> PUBLICAR CAMBIOS</button>
     </div>
 
     <!-- DASHBOARD -->
@@ -310,7 +310,7 @@
       <div class="admin-card">
         <h3><i class="ti ti-bulb"></i> ACCIONES RAPIDAS</h3>
         <div class="btn-group">
-          <button class="btn" style="background:#b87355;color:#fff;" onclick="publishData()"><i class="ti ti-cloud-upload"></i> PUBLICAR CAMBIOS</button>
+          <button class="btn" style="background:#b87355;color:#fff;" onclick="showAdminPage('publish')"><i class="ti ti-cloud-upload"></i> PUBLICAR CAMBIOS</button>
           <button class="btn btn-add" onclick="showAdminPage('products');openAddProduct()"><i class="ti ti-plus"></i> NUEVO PRODUCTO</button>
           <button class="btn btn-ghost" onclick="showAdminPage('config')"><i class="ti ti-settings"></i> CONFIGURACION</button>
           <button class="btn btn-ghost" onclick="showAdminPage('publish')"><i class="ti ti-world"></i> COMO PUBLICAR</button>
@@ -692,12 +692,42 @@
       <p class="page-desc">Actualiza tu catálogo para que tus clientes vean los cambios</p>
 
       <div class="admin-card" style="border:2px solid var(--green-dark);background:rgba(61,74,53,0.03);">
-        <h3><i class="ti ti-cloud-upload"></i> PUBLICAR CAMBIOS EN EL CATALOGO</h3>
+        <h3><i class="ti ti-brand-github"></i> PUBLICAR DIRECTO A GITHUB (RECOMENDADO)</h3>
         <p style="font-size:13px;color:var(--text-mid);line-height:1.8;margin-bottom:1rem;">
-          Cuando haces cambios en productos, configuración o contenido, debes publicarlos para que tus clientes los vean. El proceso es simple:
+          Publica con un solo clic: se sube automáticamente el <code>data.json</code> a tu repositorio. Configura esto una sola vez.
+        </p>
+        <div class="field" style="max-width:520px;">
+          <label>Usuario u organización de GitHub</label>
+          <input type="text" id="gh-owner" placeholder="ej: AmazoniaC" autocomplete="off" spellcheck="false">
+        </div>
+        <div class="field" style="max-width:520px;">
+          <label>Nombre del repositorio</label>
+          <input type="text" id="gh-repo" placeholder="ej: CatalogoAmazoniaConcrete" autocomplete="off" spellcheck="false">
+        </div>
+        <div class="field" style="max-width:520px;">
+          <label>Rama</label>
+          <input type="text" id="gh-branch" placeholder="main" value="main" autocomplete="off" spellcheck="false">
+        </div>
+        <div class="field" style="max-width:520px;">
+          <label>Token de acceso (Personal Access Token)</label>
+          <input type="password" id="gh-token" placeholder="github_pat_..." autocomplete="off" spellcheck="false">
+          <small style="display:block;margin-top:6px;font-size:11px;color:var(--text-light);line-height:1.6;">
+            Crea un token en <strong>github.com → Settings → Developer settings → Fine-grained tokens</strong>, dale acceso solo a este repositorio y permiso <strong>"Contents: Read and write"</strong>. El token se guarda solo en este navegador y <strong>nunca</strong> se incluye en el catálogo publicado.
+          </small>
+        </div>
+        <div class="btn-group" style="margin-top:1rem;">
+          <button class="btn" style="background:var(--green-dark);color:#fff;font-size:13px;padding:.8rem 2rem;" onclick="publishToGitHub()"><i class="ti ti-cloud-upload" style="font-size:18px;"></i> PUBLICAR DIRECTO A GITHUB</button>
+        </div>
+        <p id="gh-status" style="display:none;margin-top:1rem;font-size:13px;font-weight:500;"></p>
+      </div>
+
+      <div class="admin-card">
+        <h3><i class="ti ti-download"></i> MÉTODO MANUAL (ALTERNATIVA)</h3>
+        <p style="font-size:13px;color:var(--text-mid);line-height:1.8;margin-bottom:1rem;">
+          Si prefieres no usar un token, puedes descargar el <code>data.json</code> y subirlo manualmente:
         </p>
         <ol style="margin-left:1.5rem;font-size:13px;color:var(--text-mid);line-height:2.5;">
-          <li>Haz clic en <strong>"Publicar cambios"</strong> - se descargara un archivo <code>data.json</code></li>
+          <li>Haz clic en <strong>"Descargar data.json"</strong></li>
           <li>Ve a tu repositorio en <strong>GitHub</strong></li>
           <li>Busca el archivo <code>data.json</code> que ya existe y haz clic en el icono de editar (lapiz)</li>
           <li>Reemplaza todo el contenido con el del archivo descargado (Ctrl+A, pegar)</li>
@@ -705,7 +735,7 @@
           <li>En 1-2 minutos tus clientes veran los cambios!</li>
         </ol>
         <div class="btn-group" style="margin-top:1.5rem;">
-          <button class="btn" style="background:#b87355;color:#fff;font-size:13px;padding:.8rem 2rem;" onclick="publishData()"><i class="ti ti-cloud-upload" style="font-size:18px;"></i> PUBLICAR CAMBIOS (DESCARGAR data.json)</button>
+          <button class="btn" style="background:#b87355;color:#fff;font-size:13px;padding:.8rem 2rem;" onclick="publishData()"><i class="ti ti-download" style="font-size:18px;"></i> DESCARGAR data.json</button>
         </div>
       </div>
 
@@ -953,6 +983,7 @@ function showAdminPage(id){
   if(id==='products') renderProductsTable();
   if(id==='config') loadConfigForm();
   if(id==='content') loadContentForm();
+  if(id==='publish') loadGitHubSettingsUI();
 }
 
 function initAdmin(){
@@ -962,6 +993,7 @@ function initAdmin(){
   loadContentForm();
   updatePublishBanner();
   updateLogoPreview();
+  loadGitHubSettingsUI();
 }
 
 // DASHBOARD
@@ -1717,9 +1749,7 @@ function saveContentForm(){
 
 // PUBLISH - generates data.json for the catalog
 function publishData(){
-  const cfgCopy = {...getConfig()};
-  delete cfgCopy.adminPassword;
-  const data = {config: cfgCopy, products: getProducts()};
+  const data = buildPublishData();
   const blob = new Blob([JSON.stringify(data,null,2)], {type:'application/json'});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -1729,6 +1759,111 @@ function publishData(){
   URL.revokeObjectURL(url);
   clearPendingChanges();
   showToast('data.json descargado - Súbelo a tu repositorio para actualizar el catálogo');
+}
+
+// PUBLISH DIRECT TO GITHUB (via Contents API) --------------------------------
+// GitHub settings (incl. token) live in their OWN localStorage key so they are
+// never part of getConfig() and can never leak into the published data.json.
+const GH_KEY = 'ac_github';
+function getGitHubSettings(){try{return JSON.parse(localStorage.getItem(GH_KEY)||'{}');}catch(e){return{};}}
+function saveGitHubSettings(s){localStorage.setItem(GH_KEY,JSON.stringify(s));}
+
+function loadGitHubSettingsUI(){
+  const s = getGitHubSettings();
+  const set = (id,v) => { const el = document.getElementById(id); if(el && v!==undefined && v!==null) el.value = v; };
+  set('gh-owner', s.owner);
+  set('gh-repo', s.repo);
+  set('gh-branch', s.branch || 'main');
+  set('gh-token', s.token);
+}
+
+// UTF-8 safe base64 (data.json may contain accents, ñ, emojis).
+function b64EncodeUnicode(str){
+  const bytes = new TextEncoder().encode(str);
+  let bin = '';
+  bytes.forEach(b => bin += String.fromCharCode(b));
+  return btoa(bin);
+}
+
+function buildPublishData(){
+  const cfgCopy = {...getConfig()};
+  delete cfgCopy.adminPassword;
+  return {config: cfgCopy, products: getProducts()};
+}
+
+let _ghPublishing = false;
+async function publishToGitHub(){
+  if(_ghPublishing) return;
+  const owner  = (document.getElementById('gh-owner').value  || '').trim();
+  const repo   = (document.getElementById('gh-repo').value   || '').trim();
+  const branch = (document.getElementById('gh-branch').value || '').trim() || 'main';
+  const token  = (document.getElementById('gh-token').value  || '').trim();
+  const path   = 'data.json';
+
+  const statusEl = document.getElementById('gh-status');
+  const setStatus = (msg,color) => { if(statusEl){ statusEl.style.display='block'; statusEl.style.color = color || 'var(--text-mid)'; statusEl.textContent = msg; } };
+
+  if(!owner || !repo || !token){ setStatus('Completa usuario, repositorio y token.', 'var(--danger)'); return; }
+
+  // Persist settings locally so the user configures them only once.
+  saveGitHubSettings({owner, repo, branch, token});
+
+  _ghPublishing = true;
+  setStatus('Publicando en GitHub...', 'var(--text-mid)');
+
+  const contentB64 = b64EncodeUnicode(JSON.stringify(buildPublishData(), null, 2));
+  const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${encodeURIComponent(path)}`;
+  const headers = {
+    'Authorization': 'Bearer ' + token,
+    'Accept': 'application/vnd.github+json',
+    'X-GitHub-Api-Version': '2022-11-28'
+  };
+
+  try{
+    // 1) Get current file SHA (needed to update an existing file).
+    let sha;
+    const getResp = await fetch(`${apiUrl}?ref=${encodeURIComponent(branch)}`, {headers});
+    if(getResp.status === 200){
+      const info = await getResp.json();
+      sha = info.sha;
+    } else if(getResp.status === 401){
+      setStatus('Token invalido o expirado (401). Genera uno nuevo.', 'var(--danger)'); _ghPublishing=false; return;
+    } else if(getResp.status === 403){
+      setStatus('Acceso denegado (403). El token necesita permiso "Contents: Read and write" en este repositorio.', 'var(--danger)'); _ghPublishing=false; return;
+    } else if(getResp.status !== 404){
+      const e = await getResp.json().catch(()=>({}));
+      setStatus('No se pudo leer el repositorio (' + getResp.status + '). ' + (e.message||''), 'var(--danger)'); _ghPublishing=false; return;
+    }
+    // status 404 => el archivo aun no existe, se creara (sin sha).
+
+    // 2) Create or update the file.
+    const body = {
+      message: 'Actualizar data.json desde el panel de administracion',
+      content: contentB64,
+      branch: branch
+    };
+    if(sha) body.sha = sha;
+
+    const putResp = await fetch(apiUrl, {method:'PUT', headers, body: JSON.stringify(body)});
+    if(putResp.ok){
+      clearPendingChanges();
+      setStatus('¡Publicado correctamente! Tus clientes veran los cambios en 1-2 minutos.', 'var(--green-dark)');
+      showToast('Publicado directo en GitHub ✓');
+    } else {
+      const e = await putResp.json().catch(()=>({}));
+      if(putResp.status === 404){
+        setStatus('No se encontro el repositorio o la rama. Revisa usuario, repositorio y rama.', 'var(--danger)');
+      } else if(putResp.status === 409){
+        setStatus('Conflicto: el archivo cambio en GitHub. Vuelve a intentarlo.', 'var(--danger)');
+      } else {
+        setStatus('Error al publicar (' + putResp.status + '). ' + (e.message||''), 'var(--danger)');
+      }
+    }
+  }catch(err){
+    setStatus('Error de red. Revisa tu conexion e intenta de nuevo.', 'var(--danger)');
+  }finally{
+    _ghPublishing = false;
+  }
 }
 
 function markPendingChanges(){
