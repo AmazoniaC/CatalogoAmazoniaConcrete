@@ -74,5 +74,26 @@
     "freeShippingThreshold": 0,
     "soldOutBehavior": "show"
   },
-  "products": []
+  "products": [
+    {
+      "name": "Mini Maceta",
+      "cat": "Macetas",
+      "price": 4500,
+      "oldPrice": 0,
+      "badge": "",
+      "desc": "Hola, soy un producto nuevo de prueba",
+      "images": [],
+      "image": "",
+      "icon": "cone",
+      "featured": true,
+      "active": true,
+      "colors": [],
+      "weight": "",
+      "dimensions": "",
+      "material": "",
+      "availability": "available",
+      "stock": 5,
+      "id": 1
+    }
+  ]
 }
