@@ -1871,7 +1871,26 @@ function saveContentForm(){
 }
 
 // PUBLISH - generates data.json for the catalog
-function publishData(){
+// Valida el numero de WhatsApp (base del checkout). Devuelve '' si esta bien,
+// o un mensaje describiendo el problema.
+function whatsappIssue(){
+  const raw = (getConfig().whatsapp || '').trim();
+  const digits = raw.replace(/[^0-9]/g, '');
+  if(!digits) return 'No has configurado un número de WhatsApp. Los botones de pedido y contacto del catálogo no funcionarán.';
+  if(digits.length < 10 || digits.length > 15) return 'El número de WhatsApp "' + raw + '" parece inválido: debe incluir el código de país y tener entre 10 y 15 dígitos (ej: +57 300 1234567).';
+  return '';
+}
+
+// Muestra una advertencia si el WhatsApp es dudoso. Devuelve true si se debe
+// continuar con la publicacion (todo bien, o el usuario eligio publicar igual).
+async function confirmPublishChecks(){
+  const issue = whatsappIssue();
+  if(!issue) return true;
+  return await showConfirm('Revisa el WhatsApp', issue + '  ¿Publicar de todas formas?', 'PUBLICAR IGUAL', 'background:var(--green-dark);color:#fff;');
+}
+
+async function publishData(){
+  if(!(await confirmPublishChecks())){ showAdminPage('config'); return; }
   const data = buildPublishData();
   const blob = new Blob([JSON.stringify(data,null,2)], {type:'application/json'});
   const url = URL.createObjectURL(blob);
@@ -1927,6 +1946,9 @@ async function publishToGitHub(){
   const setStatus = (msg,color) => { if(statusEl){ statusEl.style.display='block'; statusEl.style.color = color || 'var(--text-mid)'; statusEl.textContent = msg; } };
 
   if(!owner || !repo || !token){ setStatus('Completa usuario, repositorio y token.', 'var(--danger)'); return; }
+
+  // Advertir si el WhatsApp (base del checkout) es dudoso.
+  if(!(await confirmPublishChecks())){ setStatus('Publicación cancelada. Revisa el WhatsApp en Configuración.', 'var(--danger)'); return; }
 
   // Persist settings locally so the user configures them only once.
   saveGitHubSettings({owner, repo, branch, token});
