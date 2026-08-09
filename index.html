@@ -334,6 +334,23 @@
     .cart-item-remove:hover{color:var(--terracota);}
     .cart-footer{padding:1.5rem;border-top:1px solid var(--concrete-light);}
     .cart-summary{margin-bottom:1rem;}
+    .checkout-form{margin-top:14px;padding-top:14px;border-top:1px solid var(--concrete-light);}
+    .checkout-form .co-title{font-size:10px;letter-spacing:2px;color:var(--text-mid);margin-bottom:.6rem;font-weight:600;display:flex;align-items:center;gap:6px;}
+    .checkout-form .co-title i{color:var(--green-dark);font-size:14px;}
+    .checkout-form input,.checkout-form textarea{width:100%;padding:.6rem .75rem;border:1px solid var(--concrete-light);border-radius:4px;font-family:'Jost',sans-serif;font-size:13px;color:var(--text-dark);background:var(--white);outline:none;margin-bottom:.5rem;transition:border-color .2s;}
+    .checkout-form input:focus,.checkout-form textarea:focus{border-color:var(--green-mid);}
+    .checkout-form textarea{min-height:56px;resize:vertical;}
+    .checkout-form input.invalid,.checkout-form textarea.invalid{border-color:var(--danger);}
+    .checkout-form .co-err{font-size:11px;color:var(--danger);margin-bottom:.4rem;}
+    body.dark .checkout-form input,body.dark .checkout-form textarea{background:#222;border-color:#444;}
+    .order-success-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:2500;padding:1.5rem;}
+    .order-success-overlay.open{display:flex;}
+    .order-success{background:var(--white);border-radius:12px;max-width:420px;width:100%;padding:2.5rem 2rem;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.3);}
+    .order-success .os-icon{width:72px;height:72px;border-radius:50%;background:rgba(74,158,90,.12);color:#4a9e5a;display:flex;align-items:center;justify-content:center;font-size:38px;margin:0 auto 1.25rem;}
+    .order-success h3{font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:400;margin-bottom:.5rem;color:var(--text-dark);}
+    .order-success .os-num{font-size:13px;letter-spacing:2px;color:var(--green-dark);font-weight:600;margin:.25rem 0 1rem;}
+    .order-success p{font-size:14px;color:var(--text-mid);line-height:1.7;margin-bottom:1.5rem;}
+    body.dark .order-success{background:#1a1a1a;}
     .cart-crosssell{margin-bottom:1rem;padding-bottom:1rem;border-bottom:1px solid var(--concrete-light);}
     .cart-crosssell .cs-title{font-size:10px;letter-spacing:2px;color:var(--text-mid);margin-bottom:.6rem;font-weight:600;display:flex;align-items:center;gap:6px;}
     .cart-crosssell .cs-title i{color:var(--green-dark);font-size:14px;}
@@ -1181,9 +1198,16 @@
         <textarea id="gift-msg-text" placeholder="Escribe un mensaje para quien lo recibe (opcional)..."></textarea>
       </div>
     </div>
-    <button class="btn-whatsapp" style="width:100%;justify-content:center;margin-top:12px;" onclick="sendWhatsAppOrder()">
-      <i class="ti ti-brand-whatsapp" style="font-size:18px"></i>
-      HACER PEDIDO POR WHATSAPP
+    <div class="checkout-form" id="checkout-form">
+      <div class="co-title"><i class="ti ti-user"></i> DATOS DE ENTREGA</div>
+      <input type="text" id="co-name" placeholder="Nombre completo *" autocomplete="name">
+      <input type="tel" id="co-phone" placeholder="Teléfono / WhatsApp *" autocomplete="tel">
+      <input type="email" id="co-email" placeholder="Correo (para tu confirmación) *" autocomplete="email">
+      <textarea id="co-address" placeholder="Dirección de entrega * (calle, número, barrio, referencias)"></textarea>
+      <div class="co-err" id="co-err" style="display:none;"></div>
+    </div>
+    <button class="btn-primary" id="checkout-btn" style="width:100%;justify-content:center;text-align:center;margin-top:12px;" onclick="submitOrder()">
+      <i class="ti ti-circle-check" style="font-size:16px;vertical-align:-3px;margin-right:5px;"></i> CONFIRMAR PEDIDO
     </button>
     <div class="payment-methods" id="cart-payment-methods"></div>
     <button class="btn-outline" style="width:100%;text-align:center;margin-top:8px;font-size:11px;letter-spacing:2px;padding:.6rem;" onclick="toggleCart()">
@@ -1237,6 +1261,17 @@
       </div>
       <div id="modal-related"></div>
     </div>
+  </div>
+</div>
+
+<!-- ORDER SUCCESS -->
+<div class="order-success-overlay" id="order-success" role="dialog" aria-modal="true" aria-label="Pedido recibido">
+  <div class="order-success">
+    <div class="os-icon"><i class="ti ti-circle-check"></i></div>
+    <h3>¡Pedido recibido!</h3>
+    <div class="os-num" id="os-num"></div>
+    <p id="os-msg">Gracias por tu compra. Te contactaremos muy pronto para coordinar el pago y la entrega.</p>
+    <button class="btn-primary" style="width:100%;text-align:center;justify-content:center;" onclick="closeOrderSuccess()">LISTO</button>
   </div>
 </div>
 
@@ -2084,6 +2119,81 @@ function sendOrderToWebhook(order) {
   try {
     fetch(url, { method: 'POST', mode: 'no-cors', keepalive: true, headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(order) });
   } catch (e) { /* silencioso: WhatsApp sigue siendo el registro maestro */ }
+}
+
+// CHECKOUT AUTOMÁTICO: envía el pedido al puente (JSONP para confirmar recepción)
+// y muestra la pantalla de éxito. Si no hay puente configurado, usa WhatsApp.
+function submitOrder() {
+  if (cart.length === 0) return;
+  const webhook = (config.orderWebhookUrl || '').trim();
+  if (!webhook) { sendWhatsAppOrder(); return; } // respaldo si no hay puente
+
+  const val = id => (document.getElementById(id).value || '').trim();
+  const name = val('co-name'), phone = val('co-phone'), email = val('co-email'), address = val('co-address');
+  const errEl = document.getElementById('co-err');
+  const mark = (id, bad) => { const el = document.getElementById(id); if (el) el.classList.toggle('invalid', bad); };
+  ['co-name','co-phone','co-email','co-address'].forEach(id => mark(id, false));
+  let err = '';
+  if (name.length < 2) { err = 'Ingresa tu nombre completo.'; mark('co-name', true); }
+  else if (phone.replace(/[^0-9]/g, '').length < 7) { err = 'Ingresa un teléfono válido.'; mark('co-phone', true); }
+  else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { err = 'Ingresa un correo válido.'; mark('co-email', true); }
+  else if (address.length < 6) { err = 'Ingresa la dirección de entrega.'; mark('co-address', true); }
+  if (err) { errEl.textContent = err; errEl.style.display = 'block'; return; }
+  errEl.style.display = 'none';
+
+  const subtotal = cart.reduce((a, x) => a + x.price * x.qty, 0);
+  const discount = calcDiscount(subtotal);
+  const shipping = getSelectedShippingCost();
+  const total = subtotal - discount + shipping;
+  const shipSel = document.getElementById('shipping-select');
+  const city = shipSel && shipSel.value !== '' ? shipSel.options[shipSel.selectedIndex].text : '';
+  const isGift = document.getElementById('gift-check') && document.getElementById('gift-check').checked;
+  const giftMsg = (document.getElementById('gift-msg-text') && document.getElementById('gift-msg-text').value.trim()) || '';
+  const itemsText = cart.map(x => `${x.qty}x ${x.name}${x.color ? ' (' + x.color + ')' : ''} = ${fmt(x.price * x.qty)}`).join(' | ');
+  let pmList = config.paymentMethods || [];
+  if (pmList.length && typeof pmList[0] === 'string') { const pmMap = { nequi: 'Nequi', daviplata: 'Daviplata', transfer: 'Transferencia', cash: 'Contraentrega' }; pmList = pmList.map(k => ({ name: pmMap[k] || k, enabled: true })); }
+  const payments = pmList.filter(m => m.enabled !== false).map(m => m.name).join(', ');
+
+  const params = {
+    action: 'create', name: name, phone: phone, email: email, address: address, city: city,
+    items: itemsText, subtotal: String(subtotal), discount: String(discount),
+    coupon: (discount > 0 && appliedCoupon) ? appliedCoupon.code : '',
+    shipping: String(shipping), total: String(total), payments: payments,
+    gift: isGift ? 'Si' : '', note: giftMsg, currency: config.currency || 'COP'
+  };
+
+  const btn = document.getElementById('checkout-btn');
+  const prev = btn.innerHTML; btn.disabled = true; btn.innerHTML = 'Enviando pedido...';
+  const cb = '__orderCb_' + Date.now();
+  let script = null;
+  const cleanup = () => { try { delete window[cb]; } catch (e) { window[cb] = undefined; } if (script && script.parentNode) script.parentNode.removeChild(script); };
+  const fail = () => { cleanup(); btn.disabled = false; btn.innerHTML = prev; showToast('No pudimos enviar el pedido. Revisa tu conexión e inténtalo de nuevo.'); };
+  const timer = setTimeout(fail, 15000);
+  window[cb] = function (res) {
+    clearTimeout(timer); cleanup(); btn.disabled = false; btn.innerHTML = prev;
+    if (res && res.ok) {
+      showOrderSuccess(res.orderNum || '');
+      cart = []; saveCart(); appliedCoupon = null; updateCartUI();
+      ['co-name','co-phone','co-email','co-address','gift-msg-text'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    } else { fail(); }
+  };
+  const qs = Object.keys(params).map(k => encodeURIComponent(k) + '=' + encodeURIComponent(params[k])).join('&');
+  script = document.createElement('script');
+  script.src = webhook + (webhook.indexOf('?') >= 0 ? '&' : '?') + qs + '&callback=' + cb + '&_=' + Date.now();
+  script.onerror = fail;
+  document.body.appendChild(script);
+}
+function showOrderSuccess(orderNum) {
+  document.getElementById('cart-panel').classList.remove('open');
+  document.getElementById('cart-overlay').classList.remove('open');
+  const numEl = document.getElementById('os-num');
+  if (numEl) numEl.textContent = orderNum ? ('N° de pedido: ' + orderNum) : '';
+  const ov = document.getElementById('order-success');
+  if (ov) ov.classList.add('open');
+}
+function closeOrderSuccess() {
+  const ov = document.getElementById('order-success');
+  if (ov) ov.classList.remove('open');
 }
 
 function askAboutProductById(id) {

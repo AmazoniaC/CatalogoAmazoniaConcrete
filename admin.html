@@ -727,11 +727,14 @@
             <option>Pendiente</option><option>Pagado</option><option>Enviado</option><option>Entregado</option><option>Cancelado</option>
           </select>
         </div>
-        <div style="overflow-x:auto;"><table class="product-table"><thead><tr><th>Fecha</th><th>Pedido</th><th>Productos</th><th>Total</th><th>Ciudad</th><th>Estado</th></tr></thead><tbody id="orders-tbody"></tbody></table></div>
+        <div style="overflow-x:auto;"><table class="product-table"><thead><tr><th>Fecha</th><th>Pedido</th><th>Cliente</th><th>Productos</th><th>Total</th><th>Ciudad</th><th>Estado</th></tr></thead><tbody id="orders-tbody"></tbody></table></div>
       </div>
 
       <div class="admin-card" id="orders-guide" style="display:none;">
         <h3><i class="ti ti-list-check"></i> CÓMO CONFIGURAR (una sola vez, gratis)</h3>
+        <div style="background:rgba(184,115,85,0.08);border:1px solid rgba(184,115,85,0.25);border-radius:6px;padding:.75rem 1rem;margin-bottom:1rem;font-size:12px;color:var(--text-mid);line-height:1.7;">
+          <strong>¿Ya lo tenías funcionando?</strong> Este script es nuevo (guarda los datos del cliente y envía confirmación). Para actualizar: <strong>1)</strong> borra la pestaña <em>"Pedidos"</em> de tu Hoja (o sus filas) para que se recreen las columnas nuevas, <strong>2)</strong> pega este script reemplazando el anterior, <strong>3)</strong> <em>Implementar → Gestionar implementaciones → editar (lápiz) → Versión: Nueva versión → Implementar</em>. Así la MISMA URL toma los cambios.
+        </div>
         <ol style="margin-left:1.4rem;font-size:13px;color:var(--text-mid);line-height:2;">
           <li>Crea una <strong>Hoja de Google</strong> nueva (sheets.new).</li>
           <li>En el menú <strong>Extensiones → Apps Script</strong>.</li>
@@ -1254,19 +1257,21 @@ function renderOrdersTable(){
   const money = n => new Intl.NumberFormat('es-CO',{style:'currency',currency:config.currency||'COP',minimumFractionDigits:0}).format(Number(n)||0);
   const rows = _ordersData.filter(o => {
     if(fst && o.status !== fst) return false;
-    if(q && !((o.orderNum+'').toLowerCase().includes(q) || (o.items+'').toLowerCase().includes(q))) return false;
+    if(q && !((o.orderNum+'').toLowerCase().includes(q) || (o.items+'').toLowerCase().includes(q) || (o.name+'').toLowerCase().includes(q))) return false;
     return true;
   });
-  if(!rows.length){ tb.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:1.5rem;color:var(--text-mid);font-size:13px;">Sin pedidos que coincidan.</td></tr>`; return; }
+  if(!rows.length){ tb.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:1.5rem;color:var(--text-mid);font-size:13px;">Sin pedidos que coincidan.</td></tr>`; return; }
   tb.innerHTML = rows.map(o => {
     const d = o.date ? new Date(o.date) : null;
     const fecha = d && !isNaN(d.getTime()) ? d.toLocaleDateString('es-CO') + '<br><span style="font-size:10px;color:var(--text-light)">' + d.toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'}) + '</span>' : '';
     const color = ORDER_STATUS_COLOR[o.status] || 'var(--text-mid)';
     const opts = ORDER_STATUSES.map(s => `<option value="${s}" ${o.status===s?'selected':''}>${s}</option>`).join('');
+    const cliente = o.name ? `<span style="font-weight:600;">${escOrder(o.name)}</span>${o.phone?`<br><a href="https://wa.me/${(o.phone+'').replace(/[^0-9]/g,'')}" target="_blank" style="font-size:11px;color:var(--green-mid);text-decoration:none;">${escOrder(o.phone)}</a>`:''}${o.address?`<br><span style="font-size:10px;color:var(--text-light);" title="${escOrder(o.address)}">${escOrder((o.address+'').slice(0,32))}${(o.address+'').length>32?'…':''}</span>`:''}` : '<span style="color:var(--text-light);">-</span>';
     return `<tr>
       <td style="white-space:nowrap;font-size:12px;">${fecha}</td>
       <td style="font-weight:600;white-space:nowrap;">${escOrder(o.orderNum)}</td>
-      <td style="font-size:12px;max-width:280px;">${escOrder(o.items)}${o.gift?' <span style="color:#b87355;">🎁</span>':''}</td>
+      <td style="font-size:12px;min-width:150px;">${cliente}</td>
+      <td style="font-size:12px;max-width:260px;">${escOrder(o.items)}${o.gift?' <span style="color:#b87355;">🎁</span>':''}</td>
       <td style="font-weight:600;white-space:nowrap;">${money(o.total)}</td>
       <td style="font-size:12px;">${escOrder(o.city)||'-'}</td>
       <td><select onchange="updateOrderStatus('${escOrder(o.orderNum)}',this.value)" style="padding:.35rem .5rem;border:1px solid var(--concrete-light);border-radius:4px;font-family:'Jost',sans-serif;font-size:12px;font-weight:600;color:${color};">${opts}</select></td>
@@ -1289,58 +1294,96 @@ function updateOrderStatus(orderNum, status){
 
 const APPS_SCRIPT_CODE = `// ===== PEDIDOS AMAZONIA CONCRETE — pega esto en Apps Script =====
 const SECRET = 'CAMBIA-ESTA-CLAVE';        // usa la MISMA clave en el admin
-const ALERT_EMAIL = 'tucorreo@gmail.com';  // aqui te llegan los avisos
+const ALERT_EMAIL = 'tucorreo@gmail.com';  // aqui te llegan los avisos de nuevos pedidos
+const STORE_NAME = 'Amazonia Concrete';
 const SHEET_NAME = 'Pedidos';
+const HEADERS = ['Fecha','Pedido','Estado','Cliente','Telefono','Correo','Direccion','Ciudad','Productos','Subtotal','Descuento','Cupon','Envio','Total','Pago','Regalo','Notas'];
 
 function sheet_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let sh = ss.getSheetByName(SHEET_NAME) || ss.insertSheet(SHEET_NAME);
-  if (sh.getLastRow() === 0) {
-    sh.appendRow(['Fecha','Pedido','Estado','Productos','Subtotal','Descuento','Cupon','Envio','Ciudad','Total','Regalo','Notas']);
-  }
+  if (sh.getLastRow() === 0) sh.appendRow(HEADERS);
   return sh;
 }
 
-function doPost(e) {
-  // Si ejecutas esta funcion a mano (boton Ejecutar) no hay datos: usa test().
-  if (!e || !e.postData) return ContentService.createTextOutput('Sin datos. Para probar usa la funcion test(); en produccion se llama sola por HTTP.');
-  const data = JSON.parse(e.postData.contents || '{}');
+function money_(n, cur) {
+  try { return new Intl.NumberFormat('es-CO', { style:'currency', currency: cur || 'COP', maximumFractionDigits:0 }).format(Number(n)||0); }
+  catch (e) { return '$' + (Number(n)||0); }
+}
+
+function createOrder_(d) {
   const sh = sheet_();
-  if (data.action === 'status') {
-    if (data.secret !== SECRET) return ContentService.createTextOutput('unauthorized');
-    const v = sh.getDataRange().getValues();
-    for (let i = 1; i < v.length; i++) {
-      if (String(v[i][1]) === String(data.orderNum)) { sh.getRange(i + 1, 3).setValue(data.status); break; }
-    }
-    return ContentService.createTextOutput('ok');
+  const orderNum = 'AC-' + ('000' + sh.getLastRow()).slice(-4); // encabezado cuenta como fila 1 => 1er pedido AC-0001
+  sh.appendRow([ new Date(), orderNum, 'Pendiente', d.name||'', d.phone||'', d.email||'',
+    d.address||'', d.city||'', d.items||'', Number(d.subtotal)||0, Number(d.discount)||0,
+    d.coupon||'', Number(d.shipping)||0, Number(d.total)||0, d.payments||'', d.gift||'', d.note||'' ]);
+  const cur = d.currency || 'COP';
+  const lines = (d.items||'').split(' | ').map(function(s){ return ' - ' + s; }).join('\\n');
+  const body = 'NUEVO PEDIDO ' + orderNum + '\\n\\n' +
+    'Cliente: ' + (d.name||'') + '\\n' +
+    'Telefono: ' + (d.phone||'') + '\\n' +
+    'Correo: ' + (d.email||'') + '\\n' +
+    'Direccion: ' + (d.address||'') + '\\n' +
+    'Ciudad: ' + (d.city||'') + '\\n\\n' +
+    'Productos:\\n' + lines + '\\n\\n' +
+    'Subtotal: ' + money_(d.subtotal, cur) + '\\n' +
+    (Number(d.discount) > 0 ? 'Descuento' + (d.coupon ? ' (' + d.coupon + ')' : '') + ': -' + money_(d.discount, cur) + '\\n' : '') +
+    'Envio: ' + (Number(d.shipping) === 0 ? 'Gratis' : money_(d.shipping, cur)) + '\\n' +
+    'TOTAL: ' + money_(d.total, cur) + '\\n' +
+    (d.payments ? '\\nMedios de pago: ' + d.payments + '\\n' : '') +
+    (d.gift === 'Si' ? '\\nEs para regalo' + (d.note ? ': "' + d.note + '"' : '') + '\\n' : (d.note ? '\\nNotas: ' + d.note + '\\n' : ''));
+  try { MailApp.sendEmail(ALERT_EMAIL, 'Nuevo pedido ' + orderNum + ' - ' + (d.name||''), body); } catch (e) {}
+  if (d.email && /^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/.test(d.email)) {
+    try {
+      MailApp.sendEmail(d.email, STORE_NAME + ' - Recibimos tu pedido ' + orderNum,
+        'Hola ' + (d.name||'') + ',\\n\\nRecibimos tu pedido ' + orderNum + ' por ' + money_(d.total, cur) + '.\\n' +
+        'Te contactaremos muy pronto para coordinar el pago y la entrega.\\n\\nResumen:\\n' + lines +
+        '\\n\\nGracias por tu compra!\\n' + STORE_NAME);
+    } catch (e) {}
   }
-  sh.appendRow([ new Date(), data.orderNum || '', 'Pendiente', data.itemsText || '',
-    data.subtotal || 0, data.discount || 0, data.coupon || '', data.shipping || 0,
-    data.shipCity || '', data.total || 0, data.isGift ? 'Si' : '', data.note || '' ]);
-  try { MailApp.sendEmail(ALERT_EMAIL, 'Nuevo pedido ' + (data.orderNum || ''),
-    (data.emailBody || 'Nuevo pedido') + '\\n\\nTotal: ' + (data.total || '')); } catch (err) {}
-  return ContentService.createTextOutput('ok');
+  return orderNum;
 }
 
 function doGet(e) {
   const p = e.parameter || {};
+  if (p.action === 'create') {
+    const num = createOrder_(p);
+    const out = JSON.stringify({ ok: true, orderNum: num });
+    if (p.callback) return ContentService.createTextOutput(p.callback + '(' + out + ')').setMimeType(ContentService.MimeType.JAVASCRIPT);
+    return ContentService.createTextOutput(out).setMimeType(ContentService.MimeType.JSON);
+  }
   if (p.secret !== SECRET) return ContentService.createTextOutput('unauthorized');
   const v = sheet_().getDataRange().getValues();
   const orders = v.slice(1).map(function(r) {
-    return { date: r[0], orderNum: r[1], status: r[2], items: r[3], subtotal: r[4],
-      discount: r[5], coupon: r[6], shipping: r[7], city: r[8], total: r[9], gift: r[10], notes: r[11] };
+    return { date:r[0], orderNum:r[1], status:r[2], name:r[3], phone:r[4], email:r[5], address:r[6],
+      city:r[7], items:r[8], subtotal:r[9], discount:r[10], coupon:r[11], shipping:r[12],
+      total:r[13], payments:r[14], gift:r[15], notes:r[16] };
   }).reverse();
   const json = JSON.stringify(orders);
   if (p.callback) return ContentService.createTextOutput(p.callback + '(' + json + ')').setMimeType(ContentService.MimeType.JAVASCRIPT);
   return ContentService.createTextOutput(json).setMimeType(ContentService.MimeType.JSON);
 }
 
-// PRUEBA: selecciona "test" arriba y pulsa Ejecutar. Debe crear una fila en la
-// Hoja y enviarte un email. La primera vez Google pedira autorizar permisos.
+function doPost(e) {
+  if (!e || !e.postData) return ContentService.createTextOutput('Sin datos. Usa test() para probar; en produccion se llama sola.');
+  const data = JSON.parse(e.postData.contents || '{}');
+  if (data.action === 'status') {
+    if (data.secret !== SECRET) return ContentService.createTextOutput('unauthorized');
+    const sh = sheet_(); const v = sh.getDataRange().getValues();
+    for (let i = 1; i < v.length; i++) { if (String(v[i][1]) === String(data.orderNum)) { sh.getRange(i + 1, 3).setValue(data.status); break; } }
+    return ContentService.createTextOutput('ok');
+  }
+  createOrder_(data); // respaldo por POST
+  return ContentService.createTextOutput('ok');
+}
+
+// PRUEBA: selecciona "test" arriba y pulsa Ejecutar. Crea un pedido de ejemplo,
+// guarda la fila y envia el email. La 1a vez Google pedira autorizar permisos.
 function test() {
-  const sh = sheet_();
-  sh.appendRow([new Date(), 'TEST-0001', 'Pendiente', '2x Producto de prueba = 50000', 50000, 0, '', 0, 'Medellin', 50000, '', 'Pedido de prueba']);
-  MailApp.sendEmail(ALERT_EMAIL, 'Pedido de prueba TEST-0001', 'Si recibes este correo, la conexion de pedidos funciona.');
+  const num = createOrder_({ name:'Cliente Prueba', phone:'3001234567', email: ALERT_EMAIL,
+    address:'Calle 1 # 2-3, Barrio Centro', city:'Medellin', items:'2x Producto de prueba = 50000',
+    subtotal:50000, discount:0, shipping:0, total:50000, payments:'Nequi', gift:'', note:'Pedido de prueba', currency:'COP' });
+  Logger.log('Pedido de prueba creado: ' + num);
 }`;
 
 function showAdminPage(id){
