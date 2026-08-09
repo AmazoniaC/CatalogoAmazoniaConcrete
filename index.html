@@ -503,6 +503,8 @@
     .card-rating .rating-count{font-size:11px;color:var(--text-light);}
     .modal-rating{display:flex;align-items:center;gap:8px;margin:2px 0 10px;}
     .modal-rating .rating-count{font-size:12px;color:var(--text-mid);}
+    .modal-video{position:relative;width:100%;padding-top:56.25%;margin:1.5rem 0 0;border-radius:8px;overflow:hidden;background:#000;}
+    .modal-video iframe,.modal-video video{position:absolute;inset:0;width:100%;height:100%;border:0;}
     .modal-reviews{margin-top:1.5rem;padding-top:1.5rem;border-top:1px solid var(--concrete-light);}
     .modal-reviews h4{font-size:10px;letter-spacing:3px;color:var(--text-mid);margin-bottom:1rem;}
     .review-item{padding:.75rem 0;border-bottom:1px solid var(--concrete-light);}
@@ -1203,18 +1205,22 @@
       <p class="desc" id="modal-desc"></p>
       <div id="modal-availability"></div>
       <div id="modal-colors"></div>
-      <div class="modal-qty">
+      <div class="modal-qty" id="modal-qty-row">
         <span style="font-size:12px;letter-spacing:2px;color:var(--text-mid);">CANTIDAD:</span>
         <div class="qty-control">
-          <button onclick="changeModalQty(-1)">-</button>
+          <button onclick="changeModalQty(-1)" aria-label="Disminuir cantidad">-</button>
           <span id="modal-qty-val">1</span>
-          <button onclick="changeModalQty(1)">+</button>
+          <button onclick="changeModalQty(1)" aria-label="Aumentar cantidad">+</button>
         </div>
       </div>
       <div class="modal-actions">
-        <button class="btn-primary" onclick="addToCartFromModal()" style="flex:1;text-align:center;">
+        <button class="btn-primary" id="modal-add-btn" onclick="addToCartFromModal()" style="flex:1;text-align:center;">
           <i class="ti ti-shopping-bag" style="font-size:14px;vertical-align:middle;margin-right:4px;"></i>
           AGREGAR AL CARRITO
+        </button>
+        <button class="btn-primary" id="modal-notify-btn" onclick="notifyWhenBack()" style="flex:1;text-align:center;display:none;background:var(--terracota);">
+          <i class="ti ti-bell" style="font-size:14px;vertical-align:middle;margin-right:4px;"></i>
+          AVÍSAME CUANDO VUELVA
         </button>
         <button class="btn-whatsapp" onclick="askAboutProduct()" style="flex:0;">
           <i class="ti ti-brand-whatsapp" style="font-size:18px;"></i>
@@ -1222,6 +1228,7 @@
         </button>
       </div>
       <div id="modal-specs"></div>
+      <div id="modal-video"></div>
       <div id="modal-reviews"></div>
       <div class="modal-share">
         <span>COMPARTIR:</span>
@@ -1496,7 +1503,7 @@ function cardHTML(p) {
       ${availBadgeHTML(p)}
       <div class="product-actions">
         ${config.enableCart && !isSoldOut ? `<button class="product-add" data-add-id="${p.id}" onclick="event.stopPropagation();addToCart(${p.id})">+ AGREGAR</button>` : ''}
-        ${isSoldOut ? `<span style="font-size:10px;letter-spacing:1px;color:#c44;">AGOTADO</span>` : ''}
+        ${isSoldOut ? (config.enableWhatsApp !== false ? `<button class="product-add" style="background:var(--terracota);" onclick="event.stopPropagation();notifyWhenBack(${p.id})" title="Avísame cuando vuelva"><i class="ti ti-bell" style="font-size:12px;vertical-align:-1px;"></i> AVÍSAME</button>` : `<span style="font-size:10px;letter-spacing:1px;color:#c44;">AGOTADO</span>`) : ''}
         ${config.enableWhatsApp ? `<button class="product-wa" onclick="event.stopPropagation();askAboutProductById(${p.id})" title="Preguntar por WhatsApp" aria-label="Preguntar por ${p.name} por WhatsApp"><i class="ti ti-brand-whatsapp" style="font-size:16px"></i></button>` : ''}
       </div>
     </div>
@@ -1530,7 +1537,8 @@ function renderCatalog(filter='Todos') {
   if (list.length === 0) {
     g.innerHTML = `<div class="no-products"><i class="ti ti-search-off"></i><p>No se encontraron productos</p><small>Prueba con otro filtro o término de búsqueda</small><button class="btn-outline" style="margin-top:1rem;font-size:11px;" onclick="clearSearch();setFilter('Todos');">VER TODOS LOS PRODUCTOS</button></div>`;
   } else {
-    g.innerHTML = list.map(p => cardHTML(p)).join('');
+    const favBar = (filter === 'Favoritos') ? `<div style="grid-column:1/-1;display:flex;justify-content:flex-end;margin-bottom:.25rem;"><button class="btn-outline" style="font-size:11px;letter-spacing:1px;" onclick="shareFavorites()"><i class="ti ti-brand-whatsapp" style="font-size:14px;vertical-align:-2px;"></i> COMPARTIR MIS FAVORITOS</button></div>` : '';
+    g.innerHTML = favBar + list.map(p => cardHTML(p)).join('');
   }
 }
 
@@ -1753,9 +1761,18 @@ function openProductModal(id) {
   }
 
   renderModalSpecs(p);
+  renderModalVideo(p);
   renderModalRating(p);
   renderModalReviews(p);
   renderModalRelated(p);
+  // Producto agotado: se oculta comprar y se ofrece "Avísame cuando vuelva".
+  const soldOut = productSoldOut(p);
+  const qtyRow = document.getElementById('modal-qty-row');
+  const addBtn = document.getElementById('modal-add-btn');
+  const notifyBtn = document.getElementById('modal-notify-btn');
+  if (qtyRow) qtyRow.style.display = soldOut ? 'none' : '';
+  if (addBtn) addBtn.style.display = soldOut ? 'none' : '';
+  if (notifyBtn) notifyBtn.style.display = (soldOut && config.enableWhatsApp !== false) ? 'flex' : 'none';
   document.getElementById('modal-qty-val').textContent = '1';
   const pm = document.getElementById('product-modal');
   if (pm && !pm.classList.contains('open')) { pm.classList.add('open'); lockBodyScroll(); }
@@ -1764,6 +1781,8 @@ function openProductModal(id) {
 function closeModal() {
   const pm = document.getElementById('product-modal');
   if (pm && pm.classList.contains('open')) { pm.classList.remove('open'); unlockBodyScroll(); }
+  const mv = document.getElementById('modal-video');
+  if (mv) mv.innerHTML = ''; // detiene la reproducción del video
   modalProduct = null;
 }
 
@@ -2053,6 +2072,14 @@ function askAboutProduct() {
   askAboutProductById(modalProduct.id);
 }
 
+// "Avísame cuando vuelva" para productos agotados: abre WhatsApp con la solicitud.
+function notifyWhenBack(id) {
+  const p = (id != null ? products.find(x => x.id === id) : modalProduct);
+  if (!p) return;
+  const msg = `¡Hola! Me interesa el producto *${p.name}* que está agotado. ¿Me avisan cuando vuelva a estar disponible? 🙏`;
+  window.open(`https://wa.me/${getWhatsAppNumber()}?text=${encodeURIComponent(msg)}`, '_blank');
+}
+
 // SHARE PRODUCT
 function shareProductWhatsApp() {
   if (!modalProduct) return;
@@ -2066,6 +2093,17 @@ function copyProductLink() {
   if (!modalProduct) return;
   const link = window.location.href.split('#')[0] + '#producto-' + modalProduct.id;
   navigator.clipboard.writeText(link).then(() => showToast('Enlace copiado al portapapeles'));
+}
+
+// Compartir la lista de favoritos por WhatsApp (sin numero: elige contacto).
+function shareFavorites() {
+  const favs = products.filter(p => favorites.includes(p.id));
+  if (!favs.length) { showToast('No tienes favoritos aún'); return; }
+  const url = window.location.href.split('#')[0];
+  let msg = `¡Hola! Estos son los productos de ${config.storeName || 'Amazonia Concrete'} que me gustaron:\n\n`;
+  favs.forEach(p => { msg += `• ${p.name}${config.showPrices ? ' — ' + fmt(p.price) : ''}\n`; });
+  msg += `\nMíralos aquí: ${url}`;
+  window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
 }
 
 // PROMO BANNER
@@ -2572,6 +2610,23 @@ function renderModalReviews(p) {
       </div>
       ${r.text ? `<p class="review-text">${esc(r.text)}</p>` : ''}
     </div>`).join('')}</div>`;
+}
+
+// VIDEO EN MODAL — soporta YouTube, Vimeo o archivos de video directos.
+function videoEmbedHTML(url) {
+  if (!url) return '';
+  const u = String(url).trim();
+  let m = u.match(/(?:youtube\.com\/(?:watch\?v=|shorts\/|embed\/)|youtu\.be\/)([A-Za-z0-9_-]{6,})/);
+  if (m) return `<div class="modal-video"><iframe src="https://www.youtube.com/embed/${m[1]}" title="Video del producto" allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen loading="lazy"></iframe></div>`;
+  m = u.match(/vimeo\.com\/(?:video\/)?(\d+)/);
+  if (m) return `<div class="modal-video"><iframe src="https://player.vimeo.com/video/${m[1]}" title="Video del producto" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen loading="lazy"></iframe></div>`;
+  if (/^https?:\/\/[^\s]+\.(mp4|webm|ogg)(\?[^\s]*)?$/i.test(u)) return `<div class="modal-video"><video controls preload="none" src="${u}"></video></div>`;
+  return '';
+}
+function renderModalVideo(p) {
+  const el = document.getElementById('modal-video');
+  if (!el) return;
+  el.innerHTML = videoEmbedHTML(p.video);
 }
 
 // PRODUCT SPECS (weight/dimensions)
