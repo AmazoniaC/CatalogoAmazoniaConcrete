@@ -962,6 +962,9 @@
         </div>
         <select class="sort-select" id="sort-select" onchange="handleSort()">
           <option value="default">ORDENAR POR</option>
+          <option value="featured">DESTACADOS PRIMERO</option>
+          <option value="newest">NOVEDADES</option>
+          <option value="sale">EN OFERTA</option>
           <option value="price-asc">PRECIO: MENOR A MAYOR</option>
           <option value="price-desc">PRECIO: MAYOR A MENOR</option>
           <option value="name-asc">NOMBRE: A - Z</option>
@@ -1537,11 +1540,15 @@ function applySorting(list) {
   const sortVal = document.getElementById('sort-select')?.value || 'default';
   if (sortVal === 'default') return list;
   const sorted = [...list];
+  const onSale = p => (p.oldPrice && p.oldPrice > p.price) ? 1 : 0;
   switch(sortVal) {
     case 'price-asc': sorted.sort((a,b) => a.price - b.price); break;
     case 'price-desc': sorted.sort((a,b) => b.price - a.price); break;
     case 'name-asc': sorted.sort((a,b) => a.name.localeCompare(b.name)); break;
     case 'name-desc': sorted.sort((a,b) => b.name.localeCompare(a.name)); break;
+    case 'newest': sorted.sort((a,b) => (b.id||0) - (a.id||0)); break;
+    case 'featured': sorted.sort((a,b) => (b.featured?1:0) - (a.featured?1:0)); break;
+    case 'sale': sorted.sort((a,b) => onSale(b) - onSale(a)); break;
   }
   return sorted;
 }
