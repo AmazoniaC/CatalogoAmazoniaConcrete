@@ -165,6 +165,10 @@
     /* TOAST */
     .toast{position:fixed;bottom:2rem;right:2rem;background:var(--green-dark);color:#fff;padding:.75rem 1.5rem;font-size:12px;letter-spacing:2px;border-radius:4px;opacity:0;transition:all .3s;z-index:999;pointer-events:none;display:flex;align-items:center;gap:8px;box-shadow:0 4px 16px rgba(0,0,0,0.2);}
     .toast.show{opacity:1;}
+    .undo-toast{position:fixed;bottom:2rem;left:50%;transform:translateX(-50%) translateY(16px);background:var(--text-dark);color:#fff;padding:.6rem .7rem .6rem 1.1rem;font-size:12px;letter-spacing:1px;border-radius:6px;opacity:0;transition:all .3s;z-index:1000;pointer-events:none;display:flex;align-items:center;gap:1rem;box-shadow:0 6px 22px rgba(0,0,0,0.28);}
+    .undo-toast.show{opacity:1;transform:translateX(-50%) translateY(0);pointer-events:auto;}
+    .undo-toast button{background:none;border:none;color:#8a9e78;font-family:'Jost',sans-serif;font-weight:600;font-size:12px;letter-spacing:2px;cursor:pointer;padding:.25rem .5rem;border-radius:3px;}
+    .undo-toast button:hover{color:#aec093;text-decoration:underline;}
 
     /* CONFIRM DIALOG */
     .confirm-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;display:none;align-items:center;justify-content:center;padding:1rem;}
@@ -907,6 +911,7 @@
 
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
+<div class="undo-toast" id="undo-toast" role="status"></div>
 
 <script>
 const DEFAULT_CONFIG = {
@@ -1289,15 +1294,16 @@ async function resetConfig(){
 }
 async function deleteProduct(id){
   const p = products.find(x => x.id === id);
-  const ok = await showConfirm('Eliminar producto', '¿Eliminar "' + (p?p.name:'este producto') + '"? Esta acción no se puede deshacer.', 'ELIMINAR');
+  const ok = await showConfirm('Eliminar producto', '¿Eliminar "' + (p?p.name:'este producto') + '"? Podrás deshacerlo por unos segundos.', 'ELIMINAR');
   if(!ok)return;
+  const snapshot = [...products];
   products = products.filter(x=>x.id!==id);
   saveProducts(products);
   renderProductsTable();
   updateDashboard();
   markPendingChanges();
-  showToast('Producto eliminado - Recuerda publicar');
   refreshPreview();
+  showUndoToast('"' + (p?p.name:'Producto') + '" eliminado', () => restoreProductsSnapshot(snapshot));
 }
 
 function duplicateProduct(id){
@@ -2271,15 +2277,16 @@ function bulkDeactivate() {
 async function bulkDelete() {
   const ids = getSelectedIds();
   if (!ids.length) return;
-  const ok = await showConfirm('Eliminar productos', 'Eliminar ' + ids.length + ' producto(s)? Esta acción no se puede deshacer.', 'ELIMINAR');
+  const ok = await showConfirm('Eliminar productos', 'Eliminar ' + ids.length + ' producto(s)? Podrás deshacerlo por unos segundos.', 'ELIMINAR');
   if (!ok) return;
+  const snapshot = [...products];
   products = products.filter(p => !ids.includes(p.id));
   saveProducts(products);
   renderProductsTable();
   updateDashboard();
   markPendingChanges();
-  showToast(ids.length + ' producto(s) eliminado(s)');
   refreshPreview();
+  showUndoToast(ids.length + ' producto(s) eliminado(s)', () => restoreProductsSnapshot(snapshot));
 }
 
 // BULK PRICE UPDATE
@@ -2419,6 +2426,40 @@ function showToast(msg){
   t.innerHTML = `<i class="ti ti-check" style="font-size:16px"></i> ${msg}`;
   t.classList.add('show');
   setTimeout(()=>t.classList.remove('show'),2500);
+}
+
+// UNDO TOAST (accion clickeable, ~7s) --------------------------------------
+let _pendingUndo = null;
+let _undoTimer = null;
+function showUndoToast(msg, onUndo){
+  const t = document.getElementById('undo-toast');
+  if(!t) return;
+  _pendingUndo = onUndo;
+  t.innerHTML = `<span><i class="ti ti-trash" style="font-size:14px;vertical-align:-2px;"></i> ${msg}</span><button type="button" onclick="doUndo()"><i class="ti ti-arrow-back-up" style="font-size:13px;vertical-align:-2px;"></i> DESHACER</button>`;
+  t.classList.add('show');
+  if(_undoTimer) clearTimeout(_undoTimer);
+  _undoTimer = setTimeout(hideUndoToast, 7000);
+}
+function hideUndoToast(){
+  const t = document.getElementById('undo-toast');
+  if(t) t.classList.remove('show');
+  _pendingUndo = null;
+  if(_undoTimer){ clearTimeout(_undoTimer); _undoTimer = null; }
+}
+function doUndo(){
+  const fn = _pendingUndo;
+  hideUndoToast();
+  if(fn) fn();
+}
+// Restaura un snapshot completo del arreglo de productos.
+function restoreProductsSnapshot(snapshot){
+  products = snapshot;
+  saveProducts(products);
+  renderProductsTable();
+  updateDashboard();
+  markPendingChanges();
+  refreshPreview();
+  showToast('Eliminación deshecha');
 }
 </script>
 </body>
