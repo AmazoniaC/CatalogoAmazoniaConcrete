@@ -839,6 +839,11 @@
       <textarea id="edit-desc" placeholder="Descripcion detallada del producto..."></textarea>
     </div>
     <div class="field">
+      <label><i class="ti ti-video" style="font-size:13px;vertical-align:-1px;"></i> VIDEO (opcional)</label>
+      <input type="text" id="edit-video" placeholder="https://youtu.be/... o enlace .mp4">
+      <small>Enlace de YouTube, Vimeo o un archivo .mp4. Se muestra en el detalle del producto — ideal para mostrar la textura y el tamaño real de la pieza.</small>
+    </div>
+    <div class="field">
       <label>IMAGENES DEL PRODUCTO</label>
       <div class="images-upload-area">
         <div class="images-preview" id="edit-images-preview"></div>
@@ -1281,6 +1286,7 @@ function openAddProduct(){
   document.getElementById('edit-material').value='';
   document.getElementById('edit-availability').value='available';
   document.getElementById('edit-stock').value='';
+  document.getElementById('edit-video').value='';
   editImages = [];
   renderImagePreviews();
   editReviews = [];
@@ -1308,6 +1314,7 @@ function editProduct(id){
   document.getElementById('edit-material').value = p.material || '';
   document.getElementById('edit-availability').value = p.availability || 'available';
   document.getElementById('edit-stock').value = (p.stock === undefined || p.stock === null) ? '' : p.stock;
+  document.getElementById('edit-video').value = p.video || '';
   editReviews = Array.isArray(p.reviews) ? p.reviews.map(r => ({...r})) : [];
   renderReviewsEditor();
   editImages = p.images ? [...p.images] : (p.image ? [p.image] : []);
@@ -1348,6 +1355,7 @@ function saveProduct(){
     availability: document.getElementById('edit-availability').value || 'available',
     stock: (() => { const v = document.getElementById('edit-stock').value.trim(); return v === '' ? undefined : Math.max(0, parseInt(v) || 0); })(),
     reviews: (() => { const r = collectReviews(); return r.length ? r : undefined; })(),
+    video: document.getElementById('edit-video').value.trim() || undefined,
   };
 
   if(id){
