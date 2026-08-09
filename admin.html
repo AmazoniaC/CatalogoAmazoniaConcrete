@@ -881,6 +881,11 @@
         <option value="sold_out">Agotado</option>
       </select>
     </div>
+    <div class="field">
+      <label>STOCK (UNIDADES)</label>
+      <input type="number" id="edit-stock" min="0" step="1" placeholder="Vacío = sin control de inventario">
+      <small>Si pones un número, el catálogo muestra "¡Solo quedan X!" cuando hay pocas y marca <strong>Agotado</strong> automáticamente al llegar a 0 (además de limitar la cantidad en el carrito). Déjalo vacío para no controlar inventario.</small>
+    </div>
     <div class="toggle-field">
       <label class="toggle"><input type="checkbox" id="edit-featured"><span class="toggle-slider"></span></label>
       <span class="toggle-label">Producto destacado (aparece en inicio)</span>
@@ -1109,6 +1114,14 @@ function updateDashboard(){
 }
 
 // PRODUCTS TABLE
+// Muestra el stock en la tabla (rojo=agotado, terracota=bajo). '' si no se controla.
+function adminStockChip(p){
+  if(p.stock===undefined||p.stock===null||p.stock==='') return '';
+  const s = Math.max(0, parseInt(p.stock)||0);
+  const color = s===0 ? 'var(--danger)' : (s<=5 ? 'var(--terracota)' : 'var(--text-mid)');
+  const label = s===0 ? 'Agotado' : (s+' uds');
+  return `<div style="font-size:10px;letter-spacing:.5px;color:${color};margin-top:3px;">${s===0?'<i class="ti ti-alert-circle" style="font-size:10px;vertical-align:-1px;"></i> ':''}${label}</div>`;
+}
 function getFilteredAdminProducts(){
   const search = (document.getElementById('adm-search')?.value || '').toLowerCase();
   const cat = document.getElementById('adm-filter-cat')?.value || '';
@@ -1151,7 +1164,7 @@ function renderProductsTable(){
     <td><span class="prod-cat">${p.cat}</span></td>
     <td><span class="prod-price">${fmt(p.price)}</span></td>
     <td>${p.badge?`<span class="prod-badge">${p.badge}</span>`:'-'}</td>
-    <td><span class="prod-badge ${p.active!==false?'active':'inactive'}">${p.active!==false?'Activo':'Inactivo'}</span></td>
+    <td><span class="prod-badge ${p.active!==false?'active':'inactive'}">${p.active!==false?'Activo':'Inactivo'}</span>${adminStockChip(p)}</td>
     <td>${p.featured?'<i class="ti ti-star-filled" style="color:var(--terracota)"></i>':'-'}</td>
     <td><div class="prod-actions">
       <button onclick="moveProductById(${p.id},-1)" title="Subir"${products.indexOf(p)===0?' disabled style="opacity:.3"':''}><i class="ti ti-arrow-up"></i></button>
@@ -1206,6 +1219,7 @@ function openAddProduct(){
   document.getElementById('edit-dimensions').value='';
   document.getElementById('edit-material').value='';
   document.getElementById('edit-availability').value='available';
+  document.getElementById('edit-stock').value='';
   editImages = [];
   renderImagePreviews();
   document.getElementById('edit-modal-title').innerHTML='<i class="ti ti-plus"></i> Nuevo Producto';
@@ -1230,6 +1244,7 @@ function editProduct(id){
   document.getElementById('edit-dimensions').value = p.dimensions || '';
   document.getElementById('edit-material').value = p.material || '';
   document.getElementById('edit-availability').value = p.availability || 'available';
+  document.getElementById('edit-stock').value = (p.stock === undefined || p.stock === null) ? '' : p.stock;
   editImages = p.images ? [...p.images] : (p.image ? [p.image] : []);
   renderImagePreviews();
   document.getElementById('edit-modal-title').innerHTML='<i class="ti ti-edit"></i> Editar Producto';
@@ -1266,6 +1281,7 @@ function saveProduct(){
     dimensions: document.getElementById('edit-dimensions').value.trim(),
     material: document.getElementById('edit-material').value.trim(),
     availability: document.getElementById('edit-availability').value || 'available',
+    stock: (() => { const v = document.getElementById('edit-stock').value.trim(); return v === '' ? undefined : Math.max(0, parseInt(v) || 0); })(),
   };
 
   if(id){
