@@ -2055,8 +2055,35 @@ function sendWhatsAppOrder() {
     msg += `\n`;
   }
   msg += `¡Quedo atento a la confirmación! 🙌`;
+
+  // Registro automático del pedido (si hay webhook configurado) — no bloquea WhatsApp.
+  const itemsText = cart.map(x => `${x.qty}× ${x.name}${x.color ? ' (' + x.color + ')' : ''} = ${fmt(x.price * x.qty)}`).join('; ');
+  sendOrderToWebhook({
+    orderNum: orderNum,
+    date: new Date().toISOString(),
+    itemsText: itemsText,
+    subtotal: subtotal,
+    discount: discount,
+    coupon: (discount > 0 && appliedCoupon) ? appliedCoupon.code : '',
+    shipping: shipping,
+    shipCity: shipCity,
+    total: total,
+    isGift: !!isGift,
+    note: giftMsg || '',
+    emailBody: msg
+  });
+
   const url = `https://wa.me/${getWhatsAppNumber()}?text=${encodeURIComponent(msg)}`;
   window.open(url, '_blank');
+}
+
+// Envía el pedido al "puente" (Google Apps Script) de forma silenciosa.
+function sendOrderToWebhook(order) {
+  const url = config.orderWebhookUrl;
+  if (!url) return;
+  try {
+    fetch(url, { method: 'POST', mode: 'no-cors', keepalive: true, headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(order) });
+  } catch (e) { /* silencioso: WhatsApp sigue siendo el registro maestro */ }
 }
 
 function askAboutProductById(id) {
