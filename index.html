@@ -2153,13 +2153,14 @@ function submitOrder() {
   const isGift = document.getElementById('gift-check') && document.getElementById('gift-check').checked;
   const giftMsg = (document.getElementById('gift-msg-text') && document.getElementById('gift-msg-text').value.trim()) || '';
   const itemsText = cart.map(x => `${x.qty}x ${x.name}${x.color ? ' (' + x.color + ')' : ''} = ${fmt(x.price * x.qty)}`).join(' | ');
+  const itemsJson = JSON.stringify(cart.map(x => ({ n: x.name, q: x.qty, up: x.price, t: x.price * x.qty, c: x.color || '' })));
   let pmList = config.paymentMethods || [];
   if (pmList.length && typeof pmList[0] === 'string') { const pmMap = { nequi: 'Nequi', daviplata: 'Daviplata', transfer: 'Transferencia', cash: 'Contraentrega' }; pmList = pmList.map(k => ({ name: pmMap[k] || k, enabled: true })); }
   const payments = pmList.filter(m => m.enabled !== false).map(m => m.name).join(', ');
 
   const params = {
     action: 'create', name: name, phone: phone, email: email, address: address, city: city,
-    items: itemsText, subtotal: String(subtotal), discount: String(discount),
+    items: itemsText, itemsJson: itemsJson, subtotal: String(subtotal), discount: String(discount),
     coupon: (discount > 0 && appliedCoupon) ? appliedCoupon.code : '',
     shipping: String(shipping), total: String(total), payments: payments,
     gift: isGift ? 'Si' : '', note: giftMsg, currency: config.currency || 'COP'
