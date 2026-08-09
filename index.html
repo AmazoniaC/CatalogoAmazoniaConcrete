@@ -255,6 +255,8 @@
     .modal-share button:hover{border-color:var(--green-dark);color:var(--green-dark);}
 
     /* PROMO BANNER */
+    .skip-link{position:absolute;left:8px;top:-56px;background:var(--green-dark);color:#fff;padding:10px 16px;border-radius:4px;z-index:9999;font-size:13px;letter-spacing:1px;text-decoration:none;transition:top .2s;}
+    .skip-link:focus{top:8px;outline:2px solid #fff;outline-offset:2px;}
     .promo-banner{background:var(--green-dark);color:#fff;padding:.6rem 2rem;display:none;align-items:center;justify-content:center;gap:1rem;font-size:12px;letter-spacing:2px;text-align:center;}
     .promo-banner.visible{display:flex;}
     .promo-banner p{margin:0;flex:1;}
@@ -767,6 +769,7 @@
 </head>
 <body>
 <script>if(localStorage.getItem('ac_dark_mode')==='1')document.body.classList.add('dark')</script>
+<a href="#sec-home" class="skip-link">Saltar al contenido</a>
 
 <a href="#sec-home" class="skip-link" id="skip-link">Saltar al contenido</a>
 
@@ -823,11 +826,11 @@
 <!-- PROMO BANNER -->
 <div class="promo-banner" id="promo-banner">
   <p id="promo-banner-text"></p>
-  <button class="promo-close" onclick="closePromoBanner()"><i class="ti ti-x"></i></button>
+  <button class="promo-close" onclick="closePromoBanner()" aria-label="Cerrar promoción"><i class="ti ti-x"></i></button>
 </div>
 
 <!-- HOME -->
-<section id="sec-home" class="active">
+<section id="sec-home" class="active" role="main" tabindex="-1">
   <div class="hero">
     <div class="hero-particles" id="hero-particles"></div>
     <div class="hero-text">
@@ -1089,17 +1092,17 @@
 
 <!-- CART PANEL -->
 <div class="cart-overlay" id="cart-overlay" onclick="toggleCart()"></div>
-<div class="cart-panel" id="cart-panel" role="dialog" aria-label="Carrito de compras">
+<div class="cart-panel" id="cart-panel" role="dialog" aria-modal="true" aria-label="Carrito de compras">
   <div class="cart-header">
     <h3>Mi carrito</h3>
-    <button class="cart-close" onclick="toggleCart()"><i class="ti ti-x"></i></button>
+    <button class="cart-close" onclick="toggleCart()" aria-label="Cerrar carrito"><i class="ti ti-x"></i></button>
   </div>
   <div class="cart-items" id="cart-items-list"></div>
   <div class="cart-footer" id="cart-footer" style="display:none">
     <div class="coupon-section" id="coupon-section">
       <div id="coupon-input-area">
         <div class="coupon-row">
-          <input type="text" id="coupon-input" placeholder="CÓDIGO DE DESCUENTO">
+          <input type="text" id="coupon-input" placeholder="CÓDIGO DE DESCUENTO" aria-label="Código de descuento">
           <button onclick="applyCoupon()">APLICAR</button>
         </div>
       </div>
@@ -1176,8 +1179,8 @@
       <div id="modal-specs"></div>
       <div class="modal-share">
         <span>COMPARTIR:</span>
-        <button onclick="shareProductWhatsApp()" title="Compartir por WhatsApp"><i class="ti ti-brand-whatsapp"></i></button>
-        <button onclick="copyProductLink()" title="Copiar enlace"><i class="ti ti-link"></i></button>
+        <button onclick="shareProductWhatsApp()" title="Compartir por WhatsApp" aria-label="Compartir por WhatsApp"><i class="ti ti-brand-whatsapp"></i></button>
+        <button onclick="copyProductLink()" title="Copiar enlace" aria-label="Copiar enlace del producto"><i class="ti ti-link"></i></button>
       </div>
       <div id="modal-related"></div>
     </div>
@@ -1185,18 +1188,18 @@
 </div>
 
 <!-- LIGHTBOX -->
-<div class="lightbox" id="lightbox" onclick="if(event.target===this)closeLightbox()">
-  <button class="lightbox-close" onclick="closeLightbox()"><i class="ti ti-x"></i></button>
-  <button class="lightbox-arrow lightbox-prev" onclick="lightboxNav(-1)"><i class="ti ti-chevron-left"></i></button>
+<div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-label="Galería de imágenes" onclick="if(event.target===this)closeLightbox()">
+  <button class="lightbox-close" onclick="closeLightbox()" aria-label="Cerrar imagen"><i class="ti ti-x"></i></button>
+  <button class="lightbox-arrow lightbox-prev" onclick="lightboxNav(-1)" aria-label="Imagen anterior"><i class="ti ti-chevron-left"></i></button>
   <img id="lightbox-img" src="" alt="">
-  <button class="lightbox-arrow lightbox-next" onclick="lightboxNav(1)"><i class="ti ti-chevron-right"></i></button>
+  <button class="lightbox-arrow lightbox-next" onclick="lightboxNav(1)" aria-label="Imagen siguiente"><i class="ti ti-chevron-right"></i></button>
   <span class="lightbox-counter" id="lightbox-counter"></span>
 </div>
 
 <!-- WELCOME POPUP -->
-<div class="welcome-overlay" id="welcome-popup" onclick="if(event.target===this)closeWelcomePopup()">
+<div class="welcome-overlay" id="welcome-popup" role="dialog" aria-modal="true" aria-label="Bienvenida" onclick="if(event.target===this)closeWelcomePopup()">
   <div class="welcome-popup">
-    <button class="welcome-close" onclick="closeWelcomePopup()"><i class="ti ti-x"></i></button>
+    <button class="welcome-close" onclick="closeWelcomePopup()" aria-label="Cerrar"><i class="ti ti-x"></i></button>
     <div class="welcome-header">
       <h3 id="welcome-title">Bienvenido</h3>
       <p id="welcome-subtitle">PIEZAS ARTESANALES EN CONCRETO</p>
@@ -1215,12 +1218,12 @@
 </div>
 
 <!-- WHATSAPP FLOAT -->
-<a class="wa-float" id="wa-float" href="#" target="_blank" rel="noopener">
+<a class="wa-float" id="wa-float" href="#" target="_blank" rel="noopener" aria-label="Escríbenos por WhatsApp">
   <i class="ti ti-brand-whatsapp"></i>
 </a>
 
 <!-- BACK TO TOP -->
-<button class="back-to-top" id="back-to-top" onclick="window.scrollTo({top:0,behavior:'smooth'})" title="Volver arriba">
+<button class="back-to-top" id="back-to-top" onclick="window.scrollTo({top:0,behavior:'smooth'})" title="Volver arriba" aria-label="Volver arriba">
   <i class="ti ti-arrow-up"></i>
 </button>
 
@@ -1229,7 +1232,7 @@
   <div class="mobile-bottom-nav-inner">
     <button class="mob-nav-btn active" data-mob-nav="home" onclick="showSection('home')"><i class="ti ti-home"></i><span>INICIO</span></button>
     <button class="mob-nav-btn" data-mob-nav="catalogo" onclick="showSection('catalogo')"><i class="ti ti-layout-grid"></i><span>CATÁLOGO</span></button>
-    <button class="mob-nav-btn" data-mob-nav="cart" onclick="toggleCart()"><i class="ti ti-shopping-bag"></i><span class="mob-cart-badge" id="mob-cart-badge">0</span><span>CARRITO</span></button>
+    <button class="mob-nav-btn" data-mob-nav="cart" onclick="toggleCart()" aria-label="Carrito"><i class="ti ti-shopping-bag"></i><span class="mob-cart-badge" id="mob-cart-badge">0</span><span>CARRITO</span></button>
     <button class="mob-nav-btn" data-mob-nav="contacto" onclick="showSection('contacto')"><i class="ti ti-message-circle"></i><span>CONTACTO</span></button>
   </div>
 </div>
@@ -1242,9 +1245,9 @@
 </div>
 
 <!-- COMPARE OVERLAY -->
-<div class="compare-overlay" id="compare-overlay" onclick="if(event.target===this)closeCompare()">
+<div class="compare-overlay" id="compare-overlay" role="dialog" aria-modal="true" aria-label="Comparar productos" onclick="if(event.target===this)closeCompare()">
   <div class="compare-panel">
-    <button class="compare-close" onclick="closeCompare()"><i class="ti ti-x"></i></button>
+    <button class="compare-close" onclick="closeCompare()" aria-label="Cerrar comparación"><i class="ti ti-x"></i></button>
     <h3>Comparar productos</h3>
     <table class="compare-table" id="compare-table"></table>
   </div>
@@ -1378,7 +1381,7 @@ function cardHTML(p) {
       ${p.badge ? `<span class="${badgeClass}">${p.badge}</span>` : ''}
       ${inCart ? `<span class="in-cart-badge"><i class="ti ti-check"></i>EN CARRITO</span>` : ''}
       <label class="compare-check" onclick="event.stopPropagation()" title="Comparar"><input type="checkbox" onchange="toggleCompare(${p.id})" ${compareList.includes(p.id)?'checked':''}></label>
-      <button class="fav-btn${isFav?' active':''}" onclick="event.stopPropagation();toggleFavorite(${p.id},this)" title="${isFav?'Quitar de favoritos':'Agregar a favoritos'}"><i class="ti ti-heart${isFav?'-filled':''}"></i></button>
+      <button class="fav-btn${isFav?' active':''}" onclick="event.stopPropagation();toggleFavorite(${p.id},this)" title="${isFav?'Quitar de favoritos':'Agregar a favoritos'}" aria-label="${isFav?'Quitar de favoritos':'Agregar a favoritos'}" aria-pressed="${isFav?'true':'false'}"><i class="ti ti-heart${isFav?'-filled':''}"></i></button>
       <div class="quick-view">
         <div class="quick-view-info"><p class="qv-name">${p.name}</p>${config.showPrices?`<p class="qv-price">${fmt(p.price)}</p>`:''}</div>
         <button class="quick-view-btn" onclick="event.stopPropagation();openProductModal(${p.id})"><i class="ti ti-eye" style="font-size:14px;"></i> VER DETALLE</button>
@@ -1395,7 +1398,7 @@ function cardHTML(p) {
       <div class="product-actions">
         ${config.enableCart && !isSoldOut ? `<button class="product-add" data-add-id="${p.id}" onclick="event.stopPropagation();addToCart(${p.id})">+ AGREGAR</button>` : ''}
         ${isSoldOut ? `<span style="font-size:10px;letter-spacing:1px;color:#c44;">AGOTADO</span>` : ''}
-        ${config.enableWhatsApp ? `<button class="product-wa" onclick="event.stopPropagation();askAboutProductById(${p.id})" title="Preguntar por WhatsApp"><i class="ti ti-brand-whatsapp" style="font-size:16px"></i></button>` : ''}
+        ${config.enableWhatsApp ? `<button class="product-wa" onclick="event.stopPropagation();askAboutProductById(${p.id})" title="Preguntar por WhatsApp" aria-label="Preguntar por ${p.name} por WhatsApp"><i class="ti ti-brand-whatsapp" style="font-size:16px"></i></button>` : ''}
       </div>
     </div>
   </div>`;
@@ -1629,8 +1632,8 @@ function openProductModal(id) {
     let html = '';
     images.forEach((src, i) => { html += `<img src="${src}" class="gallery-slide${i===0?' active':''}" alt="${p.name}" onclick="event.stopPropagation();openLightbox(${i})">`; });
     if (images.length > 1) {
-      html += `<button class="gallery-arrow gallery-prev" onclick="event.stopPropagation();prevGallerySlide()"><i class="ti ti-chevron-left"></i></button>`;
-      html += `<button class="gallery-arrow gallery-next" onclick="event.stopPropagation();nextGallerySlide()"><i class="ti ti-chevron-right"></i></button>`;
+      html += `<button class="gallery-arrow gallery-prev" onclick="event.stopPropagation();prevGallerySlide()" aria-label="Imagen anterior"><i class="ti ti-chevron-left"></i></button>`;
+      html += `<button class="gallery-arrow gallery-next" onclick="event.stopPropagation();nextGallerySlide()" aria-label="Imagen siguiente"><i class="ti ti-chevron-right"></i></button>`;
       html += `<div class="gallery-dots">${images.map((_, i) => `<span class="${i===0?'active':''}" onclick="event.stopPropagation();goToGallerySlide(${i})"></span>`).join('')}</div>`;
     }
     imgEl.innerHTML = html;
@@ -1787,14 +1790,14 @@ function updateCartUI() {
         <h4>${x.name}</h4>
         ${x.color ? `<span style="font-size:10px;color:var(--text-light);letter-spacing:1px;">${x.color}</span>` : ''}
         <div class="cart-item-qty">
-          <button onclick="updateCartQty('${ck(x)}',-1)">-</button>
+          <button onclick="updateCartQty('${ck(x)}',-1)" aria-label="Disminuir cantidad de ${x.name}">-</button>
           <span>${x.qty}</span>
-          <button onclick="updateCartQty('${ck(x)}',1)">+</button>
+          <button onclick="updateCartQty('${ck(x)}',1)" aria-label="Aumentar cantidad de ${x.name}">+</button>
         </div>
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
         <p class="cart-item-price">${fmt(x.price * x.qty)}</p>
-        <button class="cart-item-remove" onclick="removeFromCart('${ck(x)}')"><i class="ti ti-trash" style="font-size:14px"></i></button>
+        <button class="cart-item-remove" onclick="removeFromCart('${ck(x)}')" aria-label="Quitar ${x.name} del carrito"><i class="ti ti-trash" style="font-size:14px"></i></button>
       </div>
     </div>`).join('');
     document.getElementById('cart-subtotal').textContent = fmt(subtotal);
