@@ -506,6 +506,15 @@
           <label class="toggle"><input type="checkbox" id="cfg-welcomePopup"><span class="toggle-slider"></span></label>
           <span class="toggle-label">Popup de bienvenida (primera visita, muestra cupón activo)</span>
         </div>
+        <div class="field" style="max-width:360px;margin-top:1.25rem;">
+          <label>PRODUCTOS AGOTADOS EN EL CATÁLOGO</label>
+          <select id="cfg-soldOutBehavior">
+            <option value="show">Mostrar normal</option>
+            <option value="end">Mostrar al final</option>
+            <option value="hide">Ocultar del catálogo</option>
+          </select>
+          <small>Cómo tratar los productos sin stock/agotados en el catálogo.</small>
+        </div>
       </div>
 
       <div class="admin-card">
@@ -1354,6 +1363,7 @@ function loadConfigForm(){
   document.getElementById('cfg-enableWhatsApp').checked = config.enableWhatsApp!==false;
   document.getElementById('cfg-welcomePopup').checked = config.welcomePopupEnabled!==false;
   document.getElementById('cfg-freeShippingThreshold').value = config.freeShippingThreshold ? config.freeShippingThreshold : '';
+  document.getElementById('cfg-soldOutBehavior').value = config.soldOutBehavior || 'show';
   document.getElementById('cfg-adminPassword').value = '';
   renderPaymentMethodsEditor();
   renderShippingZonesEditor();
@@ -1375,6 +1385,7 @@ function saveConfigForm(){
   config.enableWhatsApp = document.getElementById('cfg-enableWhatsApp').checked;
   config.welcomePopupEnabled = document.getElementById('cfg-welcomePopup').checked;
   config.freeShippingThreshold = Math.max(0, parseInt(document.getElementById('cfg-freeShippingThreshold').value) || 0);
+  config.soldOutBehavior = document.getElementById('cfg-soldOutBehavior').value || 'show';
   // Cambio de contraseña (opcional): solo si se escribe una nueva.
   const pwEl = document.getElementById('cfg-adminPassword');
   const newPw = (pwEl.value || '');

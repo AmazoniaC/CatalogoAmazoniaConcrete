@@ -1458,7 +1458,7 @@ function cardHTML(p) {
 
 function renderFeatured() {
   const g = document.getElementById('featured-grid');
-  if (g) g.innerHTML = products.filter(p => p.featured && p.active !== false).map(p => cardHTML(p)).join('');
+  if (g) g.innerHTML = applySoldOutPreference(products.filter(p => p.featured && p.active !== false)).map(p => cardHTML(p)).join('');
 }
 
 function renderCatalog(filter='Todos') {
@@ -1479,7 +1479,7 @@ function renderCatalog(filter='Todos') {
   if (priceMax && priceMax < priceRangeMax) {
     list = list.filter(p => p.price <= priceMax);
   }
-  list = applySorting(list);
+  list = applySoldOutPreference(applySorting(list));
   if (list.length === 0) {
     g.innerHTML = `<div class="no-products"><i class="ti ti-search-off"></i><p>No se encontraron productos</p><small>Prueba con otro filtro o término de búsqueda</small><button class="btn-outline" style="margin-top:1rem;font-size:11px;" onclick="clearSearch();setFilter('Todos');">VER TODOS LOS PRODUCTOS</button></div>`;
   } else {
@@ -1600,6 +1600,14 @@ function applySorting(list) {
     case 'sale': sorted.sort((a,b) => onSale(b) - onSale(a)); break;
   }
   return sorted;
+}
+
+// Manejo de agotados en el catálogo: 'show' (normal), 'end' (al final) o 'hide'.
+function applySoldOutPreference(list) {
+  const mode = config.soldOutBehavior || 'show';
+  if (mode === 'hide') return list.filter(p => !productSoldOut(p));
+  if (mode === 'end') return [...list].sort((a, b) => (productSoldOut(a) ? 1 : 0) - (productSoldOut(b) ? 1 : 0));
+  return list;
 }
 
 // FAVORITES
