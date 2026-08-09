@@ -912,6 +912,12 @@
       <label class="toggle"><input type="checkbox" id="edit-active" checked><span class="toggle-slider"></span></label>
       <span class="toggle-label">Producto activo (visible en catálogo)</span>
     </div>
+    <div class="field" style="margin-top:.75rem;">
+      <label><i class="ti ti-star" style="font-size:13px;vertical-align:-1px;"></i> RESEÑAS DE CLIENTES</label>
+      <div id="edit-reviews-editor"></div>
+      <button type="button" class="btn btn-outline" onclick="addReview()" style="margin-top:.5rem;font-size:12px;"><i class="ti ti-plus"></i> Agregar reseña</button>
+      <small style="display:block;margin-top:6px;">Aparecen como estrellas y opiniones en el catálogo, y mejoran el SEO (estrellas en Google).</small>
+    </div>
     <div class="btn-group">
       <button class="btn btn-save" onclick="saveProduct()"><i class="ti ti-device-floppy"></i> GUARDAR</button>
       <button class="btn btn-ghost" onclick="closeEditModal()">CANCELAR</button>
@@ -974,6 +980,43 @@ function saveProducts(p){localStorage.setItem('ac_products',JSON.stringify(p));}
 let config = getConfig();
 let products = getProducts();
 let editImages = [];
+// ===== RESEÑAS (editor dentro del producto) =====
+let editReviews = [];
+function _escHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function _escAttr(s){ return _escHtml(s).replace(/"/g,'&quot;'); }
+function renderReviewsEditor(){
+  const el = document.getElementById('edit-reviews-editor');
+  if(!el) return;
+  if(!editReviews.length){
+    el.innerHTML = '<p style="font-size:12px;color:var(--text-mid);font-style:italic;">Sin reseñas todavía.</p>';
+    return;
+  }
+  el.innerHTML = editReviews.map((r,i)=>`
+    <div class="repeater-row">
+      <span class="rr-num"><i class="ti ti-star"></i></span>
+      <div class="rr-fields">
+        <div style="display:flex;gap:.5rem;">
+          <input type="text" class="rev-name" value="${_escAttr(r.name||'')}" placeholder="Nombre del cliente" style="flex:1;">
+          <select class="rev-rating" style="width:130px;">
+            ${[5,4,3,2,1].map(n=>`<option value="${n}" ${(parseInt(r.rating)||5)===n?'selected':''}>${'★'.repeat(n)}${'☆'.repeat(5-n)}</option>`).join('')}
+          </select>
+        </div>
+        <textarea class="rev-text" placeholder="Comentario del cliente" style="margin-top:.4rem;min-height:48px;">${_escHtml(r.text||'')}</textarea>
+      </div>
+      <button class="rr-remove" onclick="removeReview(${i})" title="Eliminar"><i class="ti ti-trash"></i></button>
+    </div>`).join('');
+}
+function syncReviewsFromDOM(){
+  const rows = document.querySelectorAll('#edit-reviews-editor .repeater-row');
+  editReviews = Array.from(rows).map(r=>({
+    name: r.querySelector('.rev-name').value.trim(),
+    rating: parseInt(r.querySelector('.rev-rating').value)||5,
+    text: r.querySelector('.rev-text').value.trim()
+  }));
+}
+function addReview(){ syncReviewsFromDOM(); editReviews.push({name:'',rating:5,text:''}); renderReviewsEditor(); }
+function removeReview(i){ syncReviewsFromDOM(); editReviews.splice(i,1); renderReviewsEditor(); }
+function collectReviews(){ syncReviewsFromDOM(); return editReviews.filter(r=>r.name && r.text); }
 
 // LOGIN / AUTH
 // La clave se guarda como hash SHA-256 con salt en una clave propia de
@@ -1240,6 +1283,8 @@ function openAddProduct(){
   document.getElementById('edit-stock').value='';
   editImages = [];
   renderImagePreviews();
+  editReviews = [];
+  renderReviewsEditor();
   document.getElementById('edit-modal-title').innerHTML='<i class="ti ti-plus"></i> Nuevo Producto';
   document.getElementById('edit-modal').classList.add('open');
 }
@@ -1263,6 +1308,8 @@ function editProduct(id){
   document.getElementById('edit-material').value = p.material || '';
   document.getElementById('edit-availability').value = p.availability || 'available';
   document.getElementById('edit-stock').value = (p.stock === undefined || p.stock === null) ? '' : p.stock;
+  editReviews = Array.isArray(p.reviews) ? p.reviews.map(r => ({...r})) : [];
+  renderReviewsEditor();
   editImages = p.images ? [...p.images] : (p.image ? [p.image] : []);
   renderImagePreviews();
   document.getElementById('edit-modal-title').innerHTML='<i class="ti ti-edit"></i> Editar Producto';
@@ -1300,6 +1347,7 @@ function saveProduct(){
     material: document.getElementById('edit-material').value.trim(),
     availability: document.getElementById('edit-availability').value || 'available',
     stock: (() => { const v = document.getElementById('edit-stock').value.trim(); return v === '' ? undefined : Math.max(0, parseInt(v) || 0); })(),
+    reviews: (() => { const r = collectReviews(); return r.length ? r : undefined; })(),
   };
 
   if(id){

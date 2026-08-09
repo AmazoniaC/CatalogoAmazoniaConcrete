@@ -481,6 +481,24 @@
     }
 
     /* RELATED PRODUCTS */
+    .stars{display:inline-block;position:relative;font-family:Arial,sans-serif;line-height:1;color:#d8d2c8;letter-spacing:1px;font-size:13px;white-space:nowrap;}
+    .stars::before{content:"★★★★★";}
+    .stars>span{position:absolute;left:0;top:0;overflow:hidden;white-space:nowrap;color:#e6b422;}
+    .stars>span::before{content:"★★★★★";letter-spacing:1px;}
+    body.dark .stars{color:#4a463f;}
+    .card-rating{display:flex;align-items:center;gap:5px;margin:2px 0 6px;}
+    .card-rating .rating-count{font-size:11px;color:var(--text-light);}
+    .modal-rating{display:flex;align-items:center;gap:8px;margin:2px 0 10px;}
+    .modal-rating .rating-count{font-size:12px;color:var(--text-mid);}
+    .modal-reviews{margin-top:1.5rem;padding-top:1.5rem;border-top:1px solid var(--concrete-light);}
+    .modal-reviews h4{font-size:10px;letter-spacing:3px;color:var(--text-mid);margin-bottom:1rem;}
+    .review-item{padding:.75rem 0;border-bottom:1px solid var(--concrete-light);}
+    .review-item:last-child{border-bottom:none;}
+    .review-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px;}
+    .review-name{font-size:12px;font-weight:600;color:var(--text-dark);letter-spacing:.5px;}
+    .review-text{font-size:13px;color:var(--text-mid);line-height:1.6;}
+    .stars.sm{font-size:11px;}
+    .stars.lg{font-size:18px;}
     .related-products{margin-top:1.5rem;padding-top:1.5rem;border-top:1px solid var(--concrete-light);}
     .related-products h4{font-size:10px;letter-spacing:3px;color:var(--text-mid);margin-bottom:1rem;}
     .related-grid{display:flex;gap:12px;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch;}
@@ -1166,6 +1184,7 @@
     <div class="modal-body">
       <p class="product-cat" id="modal-cat"></p>
       <h3 id="modal-name"></h3>
+      <div class="modal-rating" id="modal-rating"></div>
       <p class="product-price" id="modal-price"></p>
       <p class="desc" id="modal-desc"></p>
       <div id="modal-availability"></div>
@@ -1189,6 +1208,7 @@
         </button>
       </div>
       <div id="modal-specs"></div>
+      <div id="modal-reviews"></div>
       <div class="modal-share">
         <span>COMPARTIR:</span>
         <button onclick="shareProductWhatsApp()" title="Compartir por WhatsApp" aria-label="Compartir por WhatsApp"><i class="ti ti-brand-whatsapp"></i></button>
@@ -1404,6 +1424,18 @@ function availBadgeHTML(p) {
   return a ? `<span class="avail-badge ${a.cls}">${a.text}</span>` : '';
 }
 
+// ===== RESEÑAS / VALORACIONES =====
+function reviewStats(p) {
+  const rv = Array.isArray(p.reviews) ? p.reviews.filter(r => r && r.rating) : [];
+  if (!rv.length) return { count: 0, avg: 0 };
+  const sum = rv.reduce((a, r) => a + (Number(r.rating) || 0), 0);
+  return { count: rv.length, avg: Math.round((sum / rv.length) * 10) / 10 };
+}
+function starsHTML(avg, cls) {
+  const pct = Math.max(0, Math.min(100, (avg / 5) * 100));
+  return `<span class="stars ${cls || ''}" role="img" aria-label="${avg} de 5 estrellas"><span style="width:${pct}%"></span></span>`;
+}
+
 // ===== BADGES AUTOMÁTICOS =====
 // "Nuevo" = entre los 3 productos con id más alto (los agregados más recientes).
 function isNewProduct(p) {
@@ -1444,6 +1476,7 @@ function cardHTML(p) {
     <div class="product-info">
       <p class="product-cat">${p.cat.toUpperCase()}</p>
       <p class="product-name">${p.name}</p>
+      ${(() => { const s = reviewStats(p); return s.count ? `<div class="card-rating">${starsHTML(s.avg, 'sm')}<span class="rating-count">(${s.count})</span></div>` : ''; })()}
       ${p.desc ? `<p class="product-desc">${p.desc}</p>` : ''}
       ${config.showPrices ? `<p class="product-price">${priceHTML}</p>` : ''}
       ${availBadgeHTML(p)}
@@ -1706,6 +1739,8 @@ function openProductModal(id) {
   }
 
   renderModalSpecs(p);
+  renderModalRating(p);
+  renderModalReviews(p);
   renderModalRelated(p);
   document.getElementById('modal-qty-val').textContent = '1';
   const pm = document.getElementById('product-modal');
@@ -2469,6 +2504,33 @@ function renderModalAvailability(p) {
   el.innerHTML = `<span class="avail-badge ${info.cls}" style="margin-bottom:8px;">${info.text}</span>`;
 }
 
+// REVIEWS IN MODAL
+function renderModalRating(p) {
+  const el = document.getElementById('modal-rating');
+  if (!el) return;
+  const s = reviewStats(p);
+  if (!s.count) { el.innerHTML = ''; el.style.display = 'none'; return; }
+  el.style.display = 'flex';
+  el.innerHTML = `${starsHTML(s.avg, 'lg')}<span class="rating-count">${s.avg} · ${s.count} ${s.count === 1 ? 'reseña' : 'reseñas'}</span>`;
+}
+function esc(s) {
+  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+function renderModalReviews(p) {
+  const el = document.getElementById('modal-reviews');
+  if (!el) return;
+  const rv = Array.isArray(p.reviews) ? p.reviews.filter(r => r && r.rating) : [];
+  if (!rv.length) { el.innerHTML = ''; return; }
+  el.innerHTML = `<div class="modal-reviews"><h4>OPINIONES DE CLIENTES</h4>${rv.map(r => `
+    <div class="review-item">
+      <div class="review-head">
+        <span class="review-name">${esc(r.name) || 'Cliente'}</span>
+        ${starsHTML(Number(r.rating) || 0, 'sm')}
+      </div>
+      ${r.text ? `<p class="review-text">${esc(r.text)}</p>` : ''}
+    </div>`).join('')}</div>`;
+}
+
 // PRODUCT SPECS (weight/dimensions)
 function renderModalSpecs(p) {
   const el = document.getElementById('modal-specs');
@@ -2882,24 +2944,38 @@ function updateStructuredData() {
     sameAs: []
   };
   if (config.instagram) orgSchema.sameAs.push('https://instagram.com/' + config.instagram.replace('@',''));
-  const productSchemas = (products || []).filter(p => p.active !== false).slice(0, 50).map(p => ({
-    '@context': 'https://schema.org',
-    '@type': 'Product',
-    name: p.name,
-    description: p.desc || p.name,
-    image: (p.images && p.images[0]) || p.image || '',
-    category: p.cat || '',
-    sku: 'AC-' + p.id,
-    brand: { '@type': 'Brand', name: config.storeName || 'Amazonia Concrete' },
-    offers: {
-      '@type': 'Offer',
-      url: baseUrl + '#producto-' + p.id,
-      priceCurrency: config.currency || 'COP',
-      price: p.price,
-      availability: productSoldOut(p) ? 'https://schema.org/OutOfStock' : 'https://schema.org/InStock',
-      seller: { '@type': 'Organization', name: config.storeName || 'Amazonia Concrete' }
+  const productSchemas = (products || []).filter(p => p.active !== false).slice(0, 50).map(p => {
+    const schema = {
+      '@context': 'https://schema.org',
+      '@type': 'Product',
+      name: p.name,
+      description: p.desc || p.name,
+      image: (p.images && p.images[0]) || p.image || '',
+      category: p.cat || '',
+      sku: 'AC-' + p.id,
+      brand: { '@type': 'Brand', name: config.storeName || 'Amazonia Concrete' },
+      offers: {
+        '@type': 'Offer',
+        url: baseUrl + '#producto-' + p.id,
+        priceCurrency: config.currency || 'COP',
+        price: p.price,
+        availability: productSoldOut(p) ? 'https://schema.org/OutOfStock' : 'https://schema.org/InStock',
+        seller: { '@type': 'Organization', name: config.storeName || 'Amazonia Concrete' }
+      }
+    };
+    const rv = Array.isArray(p.reviews) ? p.reviews.filter(r => r && r.rating) : [];
+    if (rv.length) {
+      const s = reviewStats(p);
+      schema.aggregateRating = { '@type': 'AggregateRating', ratingValue: s.avg, reviewCount: rv.length, bestRating: 5 };
+      schema.review = rv.slice(0, 5).map(r => ({
+        '@type': 'Review',
+        author: { '@type': 'Person', name: r.name || 'Cliente' },
+        reviewRating: { '@type': 'Rating', ratingValue: Number(r.rating) || 5, bestRating: 5 },
+        reviewBody: r.text || ''
+      }));
     }
-  }));
+    return schema;
+  });
   const script = document.createElement('script');
   script.type = 'application/ld+json';
   script.id = 'structured-data';
