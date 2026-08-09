@@ -580,6 +580,14 @@
     .cookie-accept:hover{background:var(--green-mid);}
 
     /* SHIPPING CALC IN CART */
+    .free-ship-hint{margin-top:12px;padding:10px 12px;border-radius:6px;background:rgba(74,158,90,0.08);border:1px solid rgba(74,158,90,0.2);}
+    .free-ship-hint .fsh-msg{display:flex;align-items:center;gap:7px;font-size:11.5px;letter-spacing:.3px;color:var(--text-mid);line-height:1.4;}
+    .free-ship-hint .fsh-msg i{color:#4a9e5a;font-size:15px;flex-shrink:0;}
+    .free-ship-hint.reached{background:rgba(74,158,90,0.15);border-color:rgba(74,158,90,0.35);}
+    .free-ship-hint.reached .fsh-msg{color:#3a8a4a;font-weight:600;}
+    .free-ship-hint .fsh-bar{height:5px;border-radius:3px;background:var(--concrete-light);margin-top:8px;overflow:hidden;}
+    .free-ship-hint .fsh-bar>div{height:100%;background:#4a9e5a;border-radius:3px;transition:width .35s ease;}
+    body.dark .free-ship-hint .fsh-bar{background:#333;}
     .shipping-calc{margin-top:12px;padding-top:12px;border-top:1px solid var(--concrete-light);}
     .shipping-calc label{font-size:10px;letter-spacing:2px;color:var(--text-mid);display:block;margin-bottom:6px;}
     .shipping-calc select{width:100%;padding:.5rem .6rem;border:1px solid var(--concrete-light);border-radius:3px;font-family:'Jost',sans-serif;font-size:12px;color:var(--text-dark);background:var(--white);outline:none;cursor:pointer;}
@@ -1118,6 +1126,7 @@
     </div>
     <div class="cart-summary-row" id="cart-shipping-row" style="display:none;"><span>Envío</span><span id="cart-shipping-val">$0</span></div>
     <div class="cart-total"><span>Total</span><strong id="cart-total-val">$0</strong></div>
+    <div id="free-ship-hint" class="free-ship-hint" style="display:none;"></div>
     <div class="shipping-calc" id="shipping-calc">
       <label>CALCULAR ENVÍO</label>
       <select id="shipping-select" onchange="updateShippingCost()">
@@ -1869,6 +1878,7 @@ function updateCartUI() {
     document.getElementById('cart-total-val').textContent = fmt(total + shipping);
     footer.style.display = 'block';
   }
+  renderFreeShipHint(subtotal);
   renderAppliedCoupon();
   renderPaymentMethods();
 }
@@ -2759,21 +2769,46 @@ function updateShippingCost() {
   const zones = config.shippingZones && config.shippingZones.length ? config.shippingZones : getDefaultShippingZones();
   const zone = zones[parseInt(sel.value)];
   if (!zone) return;
+  const free = freeShippingActive();
+  const cost = free ? 0 : zone.cost;
   if (result) {
     result.style.display = 'flex';
     document.getElementById('shipping-days').textContent = zone.days;
     const costLabel = document.getElementById('shipping-cost-label');
-    if (zone.cost === 0) {
+    if (cost === 0) {
       costLabel.innerHTML = '<span class="ship-free">GRATIS</span>';
     } else {
-      costLabel.innerHTML = '<span class="ship-cost">' + fmt(zone.cost) + '</span>';
+      costLabel.innerHTML = '<span class="ship-cost">' + fmt(cost) + '</span>';
     }
   }
   if (row) { row.style.display = 'flex'; }
-  if (val) { val.textContent = zone.cost === 0 ? 'Gratis' : fmt(zone.cost); val.style.color = zone.cost === 0 ? '#4a9e5a' : ''; }
+  if (val) { val.textContent = cost === 0 ? 'Gratis' : fmt(cost); val.style.color = cost === 0 ? '#4a9e5a' : ''; }
   recalcCartTotal();
 }
+// Envío gratis activo si hay umbral configurado y el subtotal lo alcanza.
+function freeShippingActive() {
+  const t = Number(config.freeShippingThreshold) || 0;
+  return t > 0 && cartSubtotal() >= t;
+}
+// Aviso en el carrito: "Te faltan $X para envío gratis" / "¡Envío gratis!".
+function renderFreeShipHint(subtotal) {
+  const el = document.getElementById('free-ship-hint');
+  if (!el) return;
+  const threshold = Number(config.freeShippingThreshold) || 0;
+  if (threshold <= 0 || cart.length === 0) { el.style.display = 'none'; return; }
+  el.style.display = 'block';
+  if (subtotal >= threshold) {
+    el.className = 'free-ship-hint reached';
+    el.innerHTML = `<div class="fsh-msg"><i class="ti ti-truck-delivery"></i> <span>¡Genial! Tu pedido califica para <strong>envío gratis</strong> 🎉</span></div>`;
+  } else {
+    const remaining = threshold - subtotal;
+    const pct = Math.max(2, Math.min(100, Math.round(subtotal / threshold * 100)));
+    el.className = 'free-ship-hint';
+    el.innerHTML = `<div class="fsh-msg"><i class="ti ti-truck"></i> <span>Te faltan <strong>${fmt(remaining)}</strong> para <strong>envío gratis</strong></span></div><div class="fsh-bar"><div style="width:${pct}%"></div></div>`;
+  }
+}
 function getSelectedShippingCost() {
+  if (freeShippingActive()) return 0;
   const sel = document.getElementById('shipping-select');
   if (!sel || sel.value === '') return 0;
   const zones = config.shippingZones && config.shippingZones.length ? config.shippingZones : getDefaultShippingZones();

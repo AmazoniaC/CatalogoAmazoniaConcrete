@@ -518,6 +518,11 @@
       <div class="admin-card">
         <h3><i class="ti ti-truck-delivery"></i> ZONAS DE ENVÍO</h3>
         <p style="font-size:12px;color:var(--text-mid);margin-bottom:1rem;">Configura las ciudades o regiones con su costo de envío y tiempo de entrega. Aparece como calculadora en el carrito.</p>
+        <div class="field" style="max-width:360px;margin-bottom:1.25rem;">
+          <label>ENVÍO GRATIS DESDE (opcional)</label>
+          <input type="number" id="cfg-freeShippingThreshold" min="0" step="1000" placeholder="0 = sin envío gratis">
+          <small>Si el subtotal del carrito alcanza este monto, el envío se vuelve gratis y el cliente ve un aviso "¡Te faltan $X para envío gratis!" que anima a comprar más. Deja 0 (o vacío) para desactivarlo.</small>
+        </div>
         <div id="shipping-zones-editor"></div>
         <button class="btn btn-outline" onclick="addShippingZone()" style="margin-top:.75rem;font-size:12px;"><i class="ti ti-plus"></i> Agregar zona</button>
       </div>
@@ -1347,6 +1352,7 @@ function loadConfigForm(){
   document.getElementById('cfg-enableCart').checked = config.enableCart!==false;
   document.getElementById('cfg-enableWhatsApp').checked = config.enableWhatsApp!==false;
   document.getElementById('cfg-welcomePopup').checked = config.welcomePopupEnabled!==false;
+  document.getElementById('cfg-freeShippingThreshold').value = config.freeShippingThreshold ? config.freeShippingThreshold : '';
   document.getElementById('cfg-adminPassword').value = '';
   renderPaymentMethodsEditor();
   renderShippingZonesEditor();
@@ -1367,6 +1373,7 @@ function saveConfigForm(){
   config.enableCart = document.getElementById('cfg-enableCart').checked;
   config.enableWhatsApp = document.getElementById('cfg-enableWhatsApp').checked;
   config.welcomePopupEnabled = document.getElementById('cfg-welcomePopup').checked;
+  config.freeShippingThreshold = Math.max(0, parseInt(document.getElementById('cfg-freeShippingThreshold').value) || 0);
   // Cambio de contraseña (opcional): solo si se escribe una nueva.
   const pwEl = document.getElementById('cfg-adminPassword');
   const newPw = (pwEl.value || '');
