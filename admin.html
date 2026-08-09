@@ -739,7 +739,7 @@
           <li>Crea una <strong>Hoja de Google</strong> nueva (sheets.new).</li>
           <li>En el menú <strong>Extensiones → Apps Script</strong>.</li>
           <li>Borra el código de ejemplo y <strong>pega el script de abajo</strong> (usa el botón Copiar).</li>
-          <li>Cambia <code>SECRET</code> por una clave tuya y <code>ALERT_EMAIL</code> por tu correo.</li>
+          <li>Cambia <code>SECRET</code> por una clave tuya. <code>ALERT_EMAIL</code> es <strong>opcional</strong>: déjalo vacío (<code>''</code>) y los avisos llegarán a tu propia cuenta de Google, o pon otro correo si prefieres.</li>
           <li><strong>(Prueba, opcional)</strong> Arriba, en el selector de funciones elige <code>test</code> y pulsa <strong>Ejecutar</strong>. La primera vez Google pedirá autorizar permisos (acéptalos). Debe crear una fila en la Hoja y enviarte un email. <strong>Nunca ejecutes <code>doPost</code> a mano</strong> — da error porque no hay pedido; es normal.</li>
           <li><strong>Implementar → Nueva implementación → Aplicación web</strong>. En "Quién tiene acceso" elige <strong>Cualquiera</strong>. Autoriza los permisos.</li>
           <li>Copia la <strong>URL del Web App</strong> (termina en <code>/exec</code>) y pégala arriba, junto con tu clave secreta. Guarda.</li>
@@ -1294,9 +1294,15 @@ function updateOrderStatus(orderNum, status){
 
 const APPS_SCRIPT_CODE = `// ===== PEDIDOS AMAZONIA CONCRETE — pega esto en Apps Script =====
 const SECRET = 'CAMBIA-ESTA-CLAVE';        // usa la MISMA clave en el admin
-const ALERT_EMAIL = 'tucorreo@gmail.com';  // aqui te llegan los avisos de nuevos pedidos
+const ALERT_EMAIL = '';                    // opcional: si lo dejas vacio, se usa tu propio correo de Google
 const STORE_NAME = 'Amazonia Concrete';
 const SHEET_NAME = 'Pedidos';
+
+// Correo del dueno: usa ALERT_EMAIL si esta puesto; si no, tu cuenta de Google.
+function ownerEmail_() {
+  if (ALERT_EMAIL) return ALERT_EMAIL;
+  try { return Session.getEffectiveUser().getEmail(); } catch (e) { return ''; }
+}
 const HEADERS = ['Fecha','Pedido','Estado','Cliente','Telefono','Correo','Direccion','Ciudad','Productos','Subtotal','Descuento','Cupon','Envio','Total','Pago','Regalo','Notas'];
 
 function sheet_() {
@@ -1332,7 +1338,8 @@ function createOrder_(d) {
     'TOTAL: ' + money_(d.total, cur) + '\\n' +
     (d.payments ? '\\nMedios de pago: ' + d.payments + '\\n' : '') +
     (d.gift === 'Si' ? '\\nEs para regalo' + (d.note ? ': "' + d.note + '"' : '') + '\\n' : (d.note ? '\\nNotas: ' + d.note + '\\n' : ''));
-  try { MailApp.sendEmail(ALERT_EMAIL, 'Nuevo pedido ' + orderNum + ' - ' + (d.name||''), body); } catch (e) {}
+  const owner = ownerEmail_();
+  if (owner) { try { MailApp.sendEmail(owner, 'Nuevo pedido ' + orderNum + ' - ' + (d.name||''), body); } catch (e) {} }
   if (d.email && /^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/.test(d.email)) {
     try {
       MailApp.sendEmail(d.email, STORE_NAME + ' - Recibimos tu pedido ' + orderNum,
@@ -1380,7 +1387,7 @@ function doPost(e) {
 // PRUEBA: selecciona "test" arriba y pulsa Ejecutar. Crea un pedido de ejemplo,
 // guarda la fila y envia el email. La 1a vez Google pedira autorizar permisos.
 function test() {
-  const num = createOrder_({ name:'Cliente Prueba', phone:'3001234567', email: ALERT_EMAIL,
+  const num = createOrder_({ name:'Cliente Prueba', phone:'3001234567', email: ownerEmail_(),
     address:'Calle 1 # 2-3, Barrio Centro', city:'Medellin', items:'2x Producto de prueba = 50000',
     subtotal:50000, discount:0, shipping:0, total:50000, payments:'Nequi', gift:'', note:'Pedido de prueba', currency:'COP' });
   Logger.log('Pedido de prueba creado: ' + num);
