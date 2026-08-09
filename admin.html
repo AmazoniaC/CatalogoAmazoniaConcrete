@@ -1544,6 +1544,13 @@ function renderCouponsEditor(){
             Activo
           </label>
         </div>
+        <div style="display:flex;gap:.5rem;align-items:center;margin-top:.4rem;">
+          <input type="number" class="coupon-min" value="${c.minPurchase||0}" placeholder="Compra mínima (0 = sin mínimo)" style="flex:1;" title="Monto mínimo de compra para usar el cupón">
+          <label style="display:flex;align-items:center;gap:4px;font-size:11px;white-space:nowrap;">
+            Vence:
+            <input type="date" class="coupon-expires" value="${c.expires||''}" title="Fecha de vencimiento (opcional)">
+          </label>
+        </div>
       </div>
       <button class="rr-remove" onclick="removeCoupon(${i})" title="Eliminar"><i class="ti ti-trash"></i></button>
     </div>
@@ -1555,12 +1562,14 @@ function collectCoupons(){
     code: r.querySelector('.coupon-code').value.trim().toUpperCase(),
     type: r.querySelector('.coupon-type').value,
     value: parseFloat(r.querySelector('.coupon-value').value)||0,
-    active: r.querySelector('.coupon-active').checked
+    active: r.querySelector('.coupon-active').checked,
+    minPurchase: parseFloat(r.querySelector('.coupon-min').value)||0,
+    expires: r.querySelector('.coupon-expires').value||''
   })).filter(c=>c.code && c.value>0);
 }
 function addCoupon(){
   if(!config.coupons) config.coupons = [];
-  config.coupons.push({code:'',type:'percent',value:0,active:true});
+  config.coupons.push({code:'',type:'percent',value:0,active:true,minPurchase:0,expires:''});
   renderCouponsEditor();
 }
 function removeCoupon(i){
