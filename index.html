@@ -1365,7 +1365,31 @@ const AVAIL_LABELS = {
   sold_out: {text:'Agotado', cls:'sold_out'}
 };
 
+// ===== STOCK / INVENTARIO =====
+// stock es opcional: null = sin control de inventario (ilimitado).
+const LOW_STOCK_THRESHOLD = 5;
+function getStock(p) {
+  if (p.stock === undefined || p.stock === null || p.stock === '') return null;
+  const n = Number(p.stock);
+  return isNaN(n) ? null : Math.max(0, Math.floor(n));
+}
+function productSoldOut(p) {
+  return p.availability === 'sold_out' || getStock(p) === 0;
+}
+function lowStockText(s) {
+  return s === 1 ? '¡Última unidad!' : '¡Solo quedan ' + s + '!';
+}
+// Unidades ya en el carrito de un producto (sumando variantes de color).
+function cartQtyForProduct(id) {
+  return cart.filter(x => x.id === id).reduce((a, x) => a + x.qty, 0);
+}
+
 function availBadgeHTML(p) {
+  if (productSoldOut(p)) return `<span class="avail-badge sold_out">Agotado</span>`;
+  const s = getStock(p);
+  if (s !== null && s <= LOW_STOCK_THRESHOLD) {
+    return `<span class="avail-badge low">${lowStockText(s)}</span>`;
+  }
   if (!p.availability || p.availability === 'available') return '';
   const a = AVAIL_LABELS[p.availability];
   return a ? `<span class="avail-badge ${a.cls}">${a.text}</span>` : '';
@@ -1377,7 +1401,7 @@ function cardHTML(p) {
     : fmt(p.price);
   const badgeClass = p.badge && p.badge.toLowerCase().includes('oferta') ? 'product-badge oferta' : 'product-badge';
   const isFav = favorites.includes(p.id);
-  const isSoldOut = p.availability === 'sold_out';
+  const isSoldOut = productSoldOut(p);
   const inCart = cart.some(x => x.id === p.id);
   return `<div class="product-card fade-in" onclick="openProductModal(${p.id})" ontouchstart="handleCardTouch(event,this)">
     <div class="product-img">
@@ -1685,16 +1709,28 @@ function updateGallery(el) {
 }
 
 function changeModalQty(delta) {
-  modalQty = Math.max(1, modalQty + delta);
+  let max = Infinity;
+  if (modalProduct) {
+    const s = getStock(modalProduct);
+    if (s !== null) max = Math.max(1, s - cartQtyForProduct(modalProduct.id));
+  }
+  modalQty = Math.min(max, Math.max(1, modalQty + delta));
   document.getElementById('modal-qty-val').textContent = modalQty;
 }
 
 function addToCartFromModal() {
   if (!modalProduct) return;
-  if (modalProduct.availability === 'sold_out') { showToast('Este producto está agotado'); return; }
+  if (productSoldOut(modalProduct)) { showToast('Este producto está agotado'); return; }
+  const stock = getStock(modalProduct);
+  let qty = modalQty;
+  if (stock !== null) {
+    const remaining = stock - cartQtyForProduct(modalProduct.id);
+    if (remaining <= 0) { showToast('Ya tienes el máximo disponible en el carrito'); return; }
+    if (qty > remaining) qty = remaining;
+  }
   const color = modalSelectedColor || '';
-  for (let i = 0; i < modalQty; i++) addToCart(modalProduct.id, true, color);
-  showToast(`${modalProduct.name}${color ? ' ('+color+')':''} x${modalQty} agregado al carrito`);
+  for (let i = 0; i < qty; i++) addToCart(modalProduct.id, true, color);
+  showToast(`${modalProduct.name}${color ? ' ('+color+')':''} x${qty} agregado al carrito`);
   closeModal();
 }
 
@@ -1702,7 +1738,12 @@ function addToCartFromModal() {
 function addToCart(id, silent = false, color = '') {
   if (!config.enableCart) return;
   const p = products.find(x => x.id === id);
-  if (!p || p.availability === 'sold_out') return;
+  if (!p || productSoldOut(p)) return;
+  const stock = getStock(p);
+  if (stock !== null && cartQtyForProduct(id) >= stock) {
+    if (!silent) showToast(stock === 1 ? 'Solo hay 1 unidad disponible' : 'Solo hay ' + stock + ' unidades disponibles');
+    return;
+  }
   const cartKey = color ? `${id}_${color}` : `${id}`;
   const ex = cart.find(x => (x.cartKey || String(x.id)) === cartKey);
   if (ex) ex.qty++;
@@ -1768,6 +1809,14 @@ function removeFromCart(key) {
 function updateCartQty(key, delta) {
   const item = cart.find(x => (x.cartKey || String(x.id)) === key);
   if (!item) return;
+  if (delta > 0) {
+    const p = products.find(x => x.id === item.id);
+    const stock = p ? getStock(p) : null;
+    if (stock !== null && cartQtyForProduct(item.id) >= stock) {
+      showToast(stock === 1 ? 'Solo hay 1 unidad disponible' : 'Solo hay ' + stock + ' unidades disponibles');
+      return;
+    }
+  }
   item.qty += delta;
   if (item.qty <= 0) { removeFromCart(key); return; }
   saveCart();
@@ -2371,9 +2420,18 @@ function selectColor(el, color) {
 function renderModalAvailability(p) {
   const el = document.getElementById('modal-availability');
   if (!el) return;
+  if (productSoldOut(p)) {
+    el.innerHTML = `<span class="avail-badge sold_out" style="margin-bottom:8px;">Agotado</span>`;
+    return;
+  }
+  const s = getStock(p);
+  if (s !== null && s <= LOW_STOCK_THRESHOLD) {
+    el.innerHTML = `<span class="avail-badge low" style="margin-bottom:8px;">${lowStockText(s)}</span>`;
+    return;
+  }
   const a = p.availability || 'available';
   const info = AVAIL_LABELS[a];
-  if (!info) { el.innerHTML = ''; return; }
+  if (!info || a === 'available') { el.innerHTML = ''; return; }
   el.innerHTML = `<span class="avail-badge ${info.cls}" style="margin-bottom:8px;">${info.text}</span>`;
 }
 
@@ -2779,7 +2837,7 @@ function updateStructuredData() {
       url: baseUrl + '#producto-' + p.id,
       priceCurrency: config.currency || 'COP',
       price: p.price,
-      availability: p.availability === 'sold_out' ? 'https://schema.org/OutOfStock' : 'https://schema.org/InStock',
+      availability: productSoldOut(p) ? 'https://schema.org/OutOfStock' : 'https://schema.org/InStock',
       seller: { '@type': 'Organization', name: config.storeName || 'Amazonia Concrete' }
     }
   }));
