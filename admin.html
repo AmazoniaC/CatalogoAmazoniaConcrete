@@ -221,8 +221,10 @@
     <h2>ADMIN PANEL</h2>
     <p>AMAZONIA CONCRETE</p>
     <input type="password" id="login-pass" placeholder="Contrasena" onkeydown="if(event.key==='Enter')doLogin()">
-    <button onclick="doLogin()">INGRESAR</button>
+    <input type="password" id="login-pass2" placeholder="Repite la contrasena" style="display:none;" onkeydown="if(event.key==='Enter')doLogin()">
+    <button id="login-btn" onclick="doLogin()">INGRESAR</button>
     <p class="login-error" id="login-error">Contrasena incorrecta</p>
+    <p id="login-hint" style="font-size:11px;color:var(--text-mid);margin-top:.75rem;display:none;line-height:1.5;"></p>
   </div>
 </div>
 
@@ -532,9 +534,9 @@
       <div class="admin-card">
         <h3><i class="ti ti-lock"></i> SEGURIDAD</h3>
         <div class="field">
-          <label>CONTRASEÑA DEL ADMIN</label>
-          <input type="password" id="cfg-adminPassword" value="">
-          <small>Cambia la contraseña de acceso al panel de administración</small>
+          <label>CAMBIAR CONTRASEÑA DEL ADMIN</label>
+          <input type="password" id="cfg-adminPassword" value="" placeholder="Nueva contraseña (mín. 6)" autocomplete="new-password">
+          <small>Déjalo vacío para mantener la actual. Se guarda cifrada (hash) solo en este navegador; nunca se publica en el catálogo.</small>
         </div>
       </div>
 
@@ -916,7 +918,7 @@ const DEFAULT_CONFIG = {
   aboutTitle:'Naturaleza moldeada en concreto',
   aboutP1:'Amazonia Concrete nacio en Medellin con una vision clara: crear objetos de decoracion que conecten lo urbano con lo natural.',
   aboutP2:'Trabajamos con materiales de origen local, procesos artesanales y un profundo respeto por el entorno.',
-  adminPassword:'amazonia2025',showPrices:true,enableCart:true,enableWhatsApp:true,
+  showPrices:true,enableCart:true,enableWhatsApp:true,
   footerText:'2025 Amazonia Concrete. Medellin, Colombia.'
 };
 
@@ -944,17 +946,106 @@ let config = getConfig();
 let products = getProducts();
 let editImages = [];
 
-// LOGIN
-function doLogin(){
-  const pass = document.getElementById('login-pass').value;
-  if(pass === config.adminPassword){
-    document.getElementById('login-screen').classList.add('hidden');
-    document.getElementById('admin-layout').classList.remove('locked');
-    sessionStorage.setItem('admin_auth','1');
-    initAdmin();
+// LOGIN / AUTH
+// La clave se guarda como hash SHA-256 con salt en una clave propia de
+// localStorage ('ac_admin_auth'), separada de la config, por lo que nunca
+// se incluye en data.json. Nota: en un sitio estatico esto es un candado
+// disuasorio, no seguridad real (el codigo y el localStorage son visibles).
+const AUTH_KEY = 'ac_admin_auth';
+function getAuth(){ try { return JSON.parse(localStorage.getItem(AUTH_KEY)||'null'); } catch(e){ return null; } }
+function randSalt(){
+  const a = new Uint8Array(16);
+  if (window.crypto && crypto.getRandomValues) crypto.getRandomValues(a);
+  else for (let i=0;i<a.length;i++) a[i] = Math.floor(Math.random()*256);
+  return [...a].map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+async function hashPw(salt, pw){
+  const data = salt + ':' + pw;
+  if (window.crypto && crypto.subtle){
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(data));
+    return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,'0')).join('');
+  }
+  // Fallback sin Web Crypto (p.ej. abriendo el archivo con file://): debil.
+  let h = 5381; for (let i=0;i<data.length;i++) h = ((h<<5)+h) ^ data.charCodeAt(i);
+  return 'f' + (h>>>0).toString(16);
+}
+async function setAdminPassword(pw){
+  const s = randSalt();
+  const h = await hashPw(s, pw);
+  localStorage.setItem(AUTH_KEY, JSON.stringify({s, h}));
+}
+async function verifyPassword(pw){
+  const a = getAuth();
+  if (!a || !a.s || !a.h) return false;
+  return (await hashPw(a.s, pw)) === a.h;
+}
+function isFirstRun(){ return !getAuth() && !config.adminPassword; }
+
+function initLoginScreen(){
+  const h2 = document.querySelector('.login-box h2');
+  const pass2 = document.getElementById('login-pass2');
+  const btn = document.getElementById('login-btn');
+  const hint = document.getElementById('login-hint');
+  const err = document.getElementById('login-error');
+  if (err) err.style.display = 'none';
+  if (isFirstRun()){
+    if (h2) h2.textContent = 'CREAR CONTRASEÑA';
+    document.getElementById('login-pass').placeholder = 'Nueva contraseña (mín. 6)';
+    if (pass2) pass2.style.display = '';
+    if (btn) btn.textContent = 'CREAR Y ENTRAR';
+    if (hint){ hint.style.display = 'block'; hint.textContent = 'Primera vez: define una contraseña para proteger tu panel.'; }
   } else {
-    document.getElementById('login-error').style.display='block';
-    document.getElementById('login-pass').value='';
+    if (h2) h2.textContent = 'ADMIN PANEL';
+    document.getElementById('login-pass').placeholder = 'Contraseña';
+    if (pass2) pass2.style.display = 'none';
+    if (btn) btn.textContent = 'INGRESAR';
+    if (hint) hint.style.display = 'none';
+  }
+}
+
+function enterAdmin(){
+  document.getElementById('login-screen').classList.add('hidden');
+  document.getElementById('admin-layout').classList.remove('locked');
+  sessionStorage.setItem('admin_auth','1');
+  initAdmin();
+}
+
+async function doLogin(){
+  const passEl = document.getElementById('login-pass');
+  const pass = passEl.value || '';
+  const err = document.getElementById('login-error');
+  const showErr = (msg) => { if (err){ err.textContent = msg; err.style.display = 'block'; } };
+
+  if (isFirstRun()){
+    const pass2 = (document.getElementById('login-pass2').value || '');
+    if (pass.length < 6){ showErr('Mínimo 6 caracteres'); return; }
+    if (pass !== pass2){ showErr('Las contraseñas no coinciden'); return; }
+    await setAdminPassword(pass);
+    enterAdmin();
+    return;
+  }
+
+  const auth = getAuth();
+  let ok = false, usedDefault = false;
+  if (auth){
+    ok = await verifyPassword(pass);
+  } else if (config.adminPassword){
+    // Migracion de la clave heredada en texto plano -> hash, y limpieza.
+    ok = (pass === config.adminPassword);
+    if (ok){
+      usedDefault = (pass === 'amazonia2025');
+      await setAdminPassword(pass);
+      delete config.adminPassword;
+      saveConfig(config);
+    }
+  }
+
+  if (ok){
+    enterAdmin();
+    if (usedDefault) showToast('Estás usando la contraseña por defecto. Cámbiala en Configuración → Seguridad.');
+  } else {
+    showErr('Contraseña incorrecta');
+    passEl.value = '';
   }
 }
 
@@ -962,6 +1053,9 @@ function doLogout(){
   sessionStorage.removeItem('admin_auth');
   document.getElementById('login-screen').classList.remove('hidden');
   document.getElementById('admin-layout').classList.add('locked');
+  const p1 = document.getElementById('login-pass'); if (p1) p1.value = '';
+  const p2 = document.getElementById('login-pass2'); if (p2) p2.value = '';
+  initLoginScreen();
 }
 
 // Check session
@@ -969,6 +1063,8 @@ if(sessionStorage.getItem('admin_auth')==='1'){
   document.getElementById('login-screen').classList.add('hidden');
   document.getElementById('admin-layout').classList.remove('locked');
   setTimeout(initAdmin, 100);
+} else {
+  initLoginScreen();
 }
 
 // ADMIN PAGES
@@ -1228,7 +1324,7 @@ function loadConfigForm(){
   document.getElementById('cfg-enableCart').checked = config.enableCart!==false;
   document.getElementById('cfg-enableWhatsApp').checked = config.enableWhatsApp!==false;
   document.getElementById('cfg-welcomePopup').checked = config.welcomePopupEnabled!==false;
-  document.getElementById('cfg-adminPassword').value = config.adminPassword||'';
+  document.getElementById('cfg-adminPassword').value = '';
   renderPaymentMethodsEditor();
   renderShippingZonesEditor();
   renderInstagramPhotosEditor();
@@ -1248,7 +1344,18 @@ function saveConfigForm(){
   config.enableCart = document.getElementById('cfg-enableCart').checked;
   config.enableWhatsApp = document.getElementById('cfg-enableWhatsApp').checked;
   config.welcomePopupEnabled = document.getElementById('cfg-welcomePopup').checked;
-  config.adminPassword = document.getElementById('cfg-adminPassword').value || 'amazonia2025';
+  // Cambio de contraseña (opcional): solo si se escribe una nueva.
+  const pwEl = document.getElementById('cfg-adminPassword');
+  const newPw = (pwEl.value || '');
+  if (newPw){
+    if (newPw.length < 6){
+      showToast('La contraseña debe tener al menos 6 caracteres');
+    } else {
+      setAdminPassword(newPw).then(() => showToast('Contraseña de admin actualizada'));
+      pwEl.value = '';
+    }
+  }
+  if (config.adminPassword) delete config.adminPassword; // limpia texto plano heredado
   config.paymentMethods = collectPaymentMethods();
   config.shippingZones = collectShippingZones();
   config.instagramPhotos = collectInstagramPhotos();
