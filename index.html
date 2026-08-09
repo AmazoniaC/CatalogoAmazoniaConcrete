@@ -1537,7 +1537,8 @@ function renderCatalog(filter='Todos') {
   if (list.length === 0) {
     g.innerHTML = `<div class="no-products"><i class="ti ti-search-off"></i><p>No se encontraron productos</p><small>Prueba con otro filtro o término de búsqueda</small><button class="btn-outline" style="margin-top:1rem;font-size:11px;" onclick="clearSearch();setFilter('Todos');">VER TODOS LOS PRODUCTOS</button></div>`;
   } else {
-    g.innerHTML = list.map(p => cardHTML(p)).join('');
+    const favBar = (filter === 'Favoritos') ? `<div style="grid-column:1/-1;display:flex;justify-content:flex-end;margin-bottom:.25rem;"><button class="btn-outline" style="font-size:11px;letter-spacing:1px;" onclick="shareFavorites()"><i class="ti ti-brand-whatsapp" style="font-size:14px;vertical-align:-2px;"></i> COMPARTIR MIS FAVORITOS</button></div>` : '';
+    g.innerHTML = favBar + list.map(p => cardHTML(p)).join('');
   }
 }
 
@@ -2092,6 +2093,17 @@ function copyProductLink() {
   if (!modalProduct) return;
   const link = window.location.href.split('#')[0] + '#producto-' + modalProduct.id;
   navigator.clipboard.writeText(link).then(() => showToast('Enlace copiado al portapapeles'));
+}
+
+// Compartir la lista de favoritos por WhatsApp (sin numero: elige contacto).
+function shareFavorites() {
+  const favs = products.filter(p => favorites.includes(p.id));
+  if (!favs.length) { showToast('No tienes favoritos aún'); return; }
+  const url = window.location.href.split('#')[0];
+  let msg = `¡Hola! Estos son los productos de ${config.storeName || 'Amazonia Concrete'} que me gustaron:\n\n`;
+  favs.forEach(p => { msg += `• ${p.name}${config.showPrices ? ' — ' + fmt(p.price) : ''}\n`; });
+  msg += `\nMíralos aquí: ${url}`;
+  window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
 }
 
 // PROMO BANNER
