@@ -1316,7 +1316,63 @@ function money_(n, cur) {
   try { return new Intl.NumberFormat('es-CO', { style:'currency', currency: cur || 'COP', maximumFractionDigits:0 }).format(Number(n)||0); }
   catch (e) { return '$' + (Number(n)||0); }
 }
-
+function esc_(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function orderRows_(d) {
+  if (d.itemsJson) { try { return JSON.parse(d.itemsJson); } catch (e) {} }
+  return String(d.items||'').split(' | ').filter(String).map(function(s){
+    var pt = s.split(' = '); var left = pt[0]||''; var mm = left.match(/^(\\d+)x\\s*(.*)$/);
+    return { q: mm ? mm[1] : '', n: mm ? mm[2] : left, t: pt[1] || '' };
+  });
+}
+function emailHtml_(d, orderNum, forOwner) {
+  var cur = d.currency || 'COP';
+  var rows = orderRows_(d);
+  var hasUnit = rows.length && rows[0].up != null;
+  var cell = function(v){ return (typeof v === 'number') ? money_(v, cur) : esc_(v); };
+  var items = rows.map(function(r){
+    return '<tr>'
+      + '<td style="padding:9px 12px;border-bottom:1px solid #ece8e2;">' + esc_(r.n) + (r.c ? ' <span style="color:#8a7f6f;font-size:12px;">(' + esc_(r.c) + ')</span>' : '') + '</td>'
+      + '<td style="padding:9px 12px;border-bottom:1px solid #ece8e2;text-align:center;">' + esc_(r.q) + '</td>'
+      + (hasUnit ? '<td style="padding:9px 12px;border-bottom:1px solid #ece8e2;text-align:right;color:#6b6560;">' + cell(r.up) + '</td>' : '')
+      + '<td style="padding:9px 12px;border-bottom:1px solid #ece8e2;text-align:right;font-weight:600;">' + cell(r.t) + '</td></tr>';
+  }).join('');
+  var head = '<tr style="background:#3d4a35;color:#fff;">'
+    + '<th align="left" style="padding:9px 12px;font-size:11px;letter-spacing:1px;font-weight:600;">PRODUCTO</th>'
+    + '<th style="padding:9px 12px;font-size:11px;font-weight:600;">CANT</th>'
+    + (hasUnit ? '<th align="right" style="padding:9px 12px;font-size:11px;font-weight:600;">P. UNIT</th>' : '')
+    + '<th align="right" style="padding:9px 12px;font-size:11px;font-weight:600;">SUBTOTAL</th></tr>';
+  var totals = '<tr><td style="padding:4px 0;color:#6b6560;">Subtotal</td><td style="padding:4px 0;text-align:right;">' + money_(d.subtotal, cur) + '</td></tr>'
+    + (Number(d.discount) > 0 ? '<tr><td style="padding:4px 0;color:#4a9e5a;">Descuento' + (d.coupon ? ' (' + esc_(d.coupon) + ')' : '') + '</td><td style="padding:4px 0;text-align:right;color:#4a9e5a;">-' + money_(d.discount, cur) + '</td></tr>' : '')
+    + '<tr><td style="padding:4px 0;color:#6b6560;">Envio' + (d.city ? ' (' + esc_(d.city) + ')' : '') + '</td><td style="padding:4px 0;text-align:right;">' + (Number(d.shipping) === 0 ? 'Gratis' : money_(d.shipping, cur)) + '</td></tr>'
+    + '<tr><td style="padding:10px 0 0;font-weight:700;font-size:16px;">TOTAL</td><td style="padding:10px 0 0;text-align:right;font-weight:700;font-size:16px;color:#3d4a35;">' + money_(d.total, cur) + '</td></tr>';
+  var phoneDigits = String(d.phone||'').replace(/[^0-9]/g,'');
+  var client = '<tr><td style="padding:6px 12px;color:#6b6560;width:110px;">Nombre</td><td style="padding:6px 12px;font-weight:600;">' + esc_(d.name) + '</td></tr>'
+    + '<tr><td style="padding:6px 12px;color:#6b6560;">Telefono</td><td style="padding:6px 12px;"><a href="https://wa.me/' + phoneDigits + '" style="color:#3d4a35;text-decoration:none;">' + esc_(d.phone) + '</a></td></tr>'
+    + (d.email ? '<tr><td style="padding:6px 12px;color:#6b6560;">Correo</td><td style="padding:6px 12px;">' + esc_(d.email) + '</td></tr>' : '')
+    + '<tr><td style="padding:6px 12px;color:#6b6560;">Direccion</td><td style="padding:6px 12px;">' + esc_(d.address) + '</td></tr>'
+    + (d.city ? '<tr><td style="padding:6px 12px;color:#6b6560;">Ciudad</td><td style="padding:6px 12px;">' + esc_(d.city) + '</td></tr>' : '');
+  var extra = '';
+  if (d.payments) extra += '<p style="margin:14px 0 0;font-size:13px;color:#6b6560;">Medios de pago: ' + esc_(d.payments) + '</p>';
+  if (d.gift === 'Si') extra += '<p style="margin:8px 0 0;font-size:13px;color:#b87355;">Es para regalo' + (d.note ? ': "' + esc_(d.note) + '"' : '') + '</p>';
+  else if (d.note) extra += '<p style="margin:8px 0 0;font-size:13px;color:#6b6560;">Notas: ' + esc_(d.note) + '</p>';
+  var intro = forOwner
+    ? '<p style="margin:0;font-size:14px;color:#2a2620;">Tienes un nuevo pedido. Contacta al cliente para coordinar el pago y la entrega.</p>'
+    : '<p style="margin:0;font-size:14px;color:#2a2620;">Hola ' + esc_(d.name) + ', gracias por tu compra. Recibimos tu pedido y te contactaremos muy pronto para coordinar el pago y la entrega.</p>';
+  return '<div style="background:#f0ede8;padding:24px 12px;font-family:Arial,Helvetica,sans-serif;color:#2a2620;">'
+    + '<div style="max-width:600px;margin:0 auto;background:#fff;border-radius:10px;overflow:hidden;">'
+    + '<div style="background:#3d4a35;color:#fff;padding:20px 24px;">'
+    + '<div style="font-size:20px;letter-spacing:4px;font-weight:600;">' + esc_(STORE_NAME) + '</div>'
+    + '<div style="font-size:12px;letter-spacing:2px;color:#c9d1c0;margin-top:3px;">PEDIDO ' + esc_(orderNum) + '</div></div>'
+    + '<div style="padding:24px;">' + intro
+    + '<h3 style="font-size:12px;letter-spacing:2px;color:#3d4a35;margin:22px 0 8px;">DATOS DEL CLIENTE</h3>'
+    + '<table style="width:100%;border-collapse:collapse;font-size:14px;background:#faf8f5;border-radius:6px;overflow:hidden;">' + client + '</table>'
+    + '<h3 style="font-size:12px;letter-spacing:2px;color:#3d4a35;margin:22px 0 8px;">PRODUCTOS</h3>'
+    + '<table style="width:100%;border-collapse:collapse;font-size:14px;">' + head + items + '</table>'
+    + '<table style="width:100%;border-collapse:collapse;font-size:14px;margin-top:12px;border-top:2px solid #ece8e2;">' + totals + '</table>'
+    + extra + '</div>'
+    + '<div style="background:#faf8f5;padding:14px 24px;font-size:11px;color:#9a948e;text-align:center;">' + esc_(STORE_NAME) + '</div>'
+    + '</div></div>';
+}
 function createOrder_(d) {
   const sh = sheet_();
   const orderNum = 'AC-' + ('000' + sh.getLastRow()).slice(-4); // encabezado cuenta como fila 1 => 1er pedido AC-0001
@@ -1324,29 +1380,11 @@ function createOrder_(d) {
     d.address||'', d.city||'', d.items||'', Number(d.subtotal)||0, Number(d.discount)||0,
     d.coupon||'', Number(d.shipping)||0, Number(d.total)||0, d.payments||'', d.gift||'', d.note||'' ]);
   const cur = d.currency || 'COP';
-  const lines = (d.items||'').split(' | ').map(function(s){ return ' - ' + s; }).join('\\n');
-  const body = 'NUEVO PEDIDO ' + orderNum + '\\n\\n' +
-    'Cliente: ' + (d.name||'') + '\\n' +
-    'Telefono: ' + (d.phone||'') + '\\n' +
-    'Correo: ' + (d.email||'') + '\\n' +
-    'Direccion: ' + (d.address||'') + '\\n' +
-    'Ciudad: ' + (d.city||'') + '\\n\\n' +
-    'Productos:\\n' + lines + '\\n\\n' +
-    'Subtotal: ' + money_(d.subtotal, cur) + '\\n' +
-    (Number(d.discount) > 0 ? 'Descuento' + (d.coupon ? ' (' + d.coupon + ')' : '') + ': -' + money_(d.discount, cur) + '\\n' : '') +
-    'Envio: ' + (Number(d.shipping) === 0 ? 'Gratis' : money_(d.shipping, cur)) + '\\n' +
-    'TOTAL: ' + money_(d.total, cur) + '\\n' +
-    (d.payments ? '\\nMedios de pago: ' + d.payments + '\\n' : '') +
-    (d.gift === 'Si' ? '\\nEs para regalo' + (d.note ? ': "' + d.note + '"' : '') + '\\n' : (d.note ? '\\nNotas: ' + d.note + '\\n' : ''));
+  const text = 'Pedido ' + orderNum + ' - ' + (d.name||'') + '\\nTotal: ' + money_(d.total, cur) + '\\n' + (d.items||'');
   const owner = ownerEmail_();
-  if (owner) { try { MailApp.sendEmail(owner, 'Nuevo pedido ' + orderNum + ' - ' + (d.name||''), body); } catch (e) {} }
+  if (owner) { try { MailApp.sendEmail(owner, 'Nuevo pedido ' + orderNum + ' - ' + (d.name||''), text, { htmlBody: emailHtml_(d, orderNum, true), name: STORE_NAME }); } catch (e) {} }
   if (d.email && /^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/.test(d.email)) {
-    try {
-      MailApp.sendEmail(d.email, STORE_NAME + ' - Recibimos tu pedido ' + orderNum,
-        'Hola ' + (d.name||'') + ',\\n\\nRecibimos tu pedido ' + orderNum + ' por ' + money_(d.total, cur) + '.\\n' +
-        'Te contactaremos muy pronto para coordinar el pago y la entrega.\\n\\nResumen:\\n' + lines +
-        '\\n\\nGracias por tu compra!\\n' + STORE_NAME);
-    } catch (e) {}
+    try { MailApp.sendEmail(d.email, STORE_NAME + ' - Recibimos tu pedido ' + orderNum, text, { htmlBody: emailHtml_(d, orderNum, false), name: STORE_NAME }); } catch (e) {}
   }
   return orderNum;
 }
