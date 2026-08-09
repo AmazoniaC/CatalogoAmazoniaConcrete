@@ -1380,7 +1380,7 @@ function cardHTML(p) {
       <div class="quick-view">
         <div class="quick-view-info"><p class="qv-name">${p.name}</p>${config.showPrices?`<p class="qv-price">${fmt(p.price)}</p>`:''}</div>
         <button class="quick-view-btn" onclick="event.stopPropagation();openProductModal(${p.id})"><i class="ti ti-eye" style="font-size:14px;"></i> VER DETALLE</button>
-        ${config.enableCart?`<button class="quick-view-btn" onclick="event.stopPropagation();addToCart(${p.id})" id="add-btn-${p.id}"><i class="ti ti-shopping-bag" style="font-size:14px;"></i> AGREGAR</button>`:''}
+        ${config.enableCart && !isSoldOut?`<button class="quick-view-btn" onclick="event.stopPropagation();addToCart(${p.id})" id="add-btn-${p.id}"><i class="ti ti-shopping-bag" style="font-size:14px;"></i> AGREGAR</button>`:''}
       </div>
       ${getProductIcon(p, true)}
     </div>
@@ -1808,6 +1808,7 @@ function updateCartUI() {
     document.getElementById('cart-total-val').textContent = fmt(total + shipping);
     footer.style.display = 'block';
   }
+  renderAppliedCoupon();
   renderPaymentMethods();
 }
 
@@ -2255,6 +2256,23 @@ function renderPaymentMethods() {
 let appliedCoupon = null;
 let orderCounter = parseInt(localStorage.getItem('ac_order_count') || '0');
 
+// Returns '' if the coupon can be used for this subtotal, or an error message.
+function couponError(coupon, subtotal) {
+  if (!coupon || !coupon.code || coupon.active === false) return 'Cupón no válido';
+  if (coupon.expires) {
+    const exp = new Date(coupon.expires + 'T23:59:59');
+    if (!isNaN(exp.getTime()) && Date.now() > exp.getTime()) return 'Este cupón está vencido';
+  }
+  if (coupon.minPurchase && subtotal < coupon.minPurchase) {
+    return 'Compra mínima de ' + fmt(coupon.minPurchase);
+  }
+  return '';
+}
+
+function cartSubtotal() {
+  return cart.reduce((a, x) => a + x.price * x.qty, 0);
+}
+
 function applyCoupon() {
   const input = document.getElementById('coupon-input');
   const code = (input.value || '').trim().toUpperCase();
@@ -2262,28 +2280,51 @@ function applyCoupon() {
   const coupons = config.coupons || [];
   const found = coupons.find(c => c && c.code && c.code.toUpperCase() === code && c.active !== false);
   if (!found) { showToast('Cupón no válido'); return; }
+  const err = couponError(found, cartSubtotal());
+  if (err) { showToast(err); return; }
   appliedCoupon = found;
-  document.getElementById('coupon-input-area').style.display = 'none';
-  const area = document.getElementById('coupon-applied-area');
-  const label = found.type === 'percent' ? `${found.value}% OFF` : `-${fmt(found.value)}`;
-  area.innerHTML = `<div class="coupon-applied"><span><i class="ti ti-discount-2" style="font-size:14px;vertical-align:-2px;"></i> ${found.code} — ${label}</span><button onclick="removeCoupon()"><i class="ti ti-x"></i></button></div>`;
-  area.style.display = 'block';
+  renderAppliedCoupon();
   updateCartUI();
   showToast('¡Cupón aplicado!');
 }
 
 function removeCoupon() {
   appliedCoupon = null;
-  document.getElementById('coupon-input-area').style.display = '';
-  document.getElementById('coupon-applied-area').style.display = 'none';
-  document.getElementById('coupon-input').value = '';
+  const input = document.getElementById('coupon-input');
+  if (input) input.value = '';
+  renderAppliedCoupon();
   updateCartUI();
+}
+
+// Keeps the coupon UI in sync with the current cart (e.g. min-purchase not met).
+function renderAppliedCoupon() {
+  const area = document.getElementById('coupon-applied-area');
+  const inputArea = document.getElementById('coupon-input-area');
+  if (!area) return;
+  if (!appliedCoupon) {
+    area.style.display = 'none';
+    area.innerHTML = '';
+    if (inputArea) inputArea.style.display = '';
+    return;
+  }
+  if (inputArea) inputArea.style.display = 'none';
+  area.style.display = 'block';
+  const err = couponError(appliedCoupon, cartSubtotal());
+  if (err) {
+    area.innerHTML = `<div class="coupon-applied" style="background:rgba(217,79,79,0.08);border:1px solid rgba(217,79,79,0.25);color:#c44;"><span><i class="ti ti-alert-circle" style="font-size:14px;vertical-align:-2px;"></i> ${appliedCoupon.code} — ${err}</span><button onclick="removeCoupon()"><i class="ti ti-x"></i></button></div>`;
+  } else {
+    const label = appliedCoupon.type === 'percent' ? `${appliedCoupon.value}% OFF` : `-${fmt(appliedCoupon.value)}`;
+    area.innerHTML = `<div class="coupon-applied"><span><i class="ti ti-discount-2" style="font-size:14px;vertical-align:-2px;"></i> ${appliedCoupon.code} — ${label}</span><button onclick="removeCoupon()"><i class="ti ti-x"></i></button></div>`;
+  }
 }
 
 function calcDiscount(subtotal) {
   if (!appliedCoupon) return 0;
-  if (appliedCoupon.type === 'percent') return Math.round(subtotal * appliedCoupon.value / 100);
-  return Math.min(appliedCoupon.value, subtotal);
+  if (couponError(appliedCoupon, subtotal)) return 0;
+  const raw = appliedCoupon.type === 'percent'
+    ? Math.round(subtotal * appliedCoupon.value / 100)
+    : appliedCoupon.value;
+  return Math.max(0, Math.min(raw, subtotal));
 }
 
 // GIFT OPTION
