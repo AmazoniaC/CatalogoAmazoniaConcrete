@@ -99,6 +99,9 @@
 
     /* PRODUCT TABLE */
     .product-table{width:100%;border-collapse:collapse;}
+    .product-table tbody tr{cursor:grab;}
+    .product-table tbody tr.dragging{opacity:.4;cursor:grabbing;}
+    .product-table tbody tr.drag-over td{box-shadow:inset 0 2px 0 var(--green-mid);}
     .product-table th{font-size:10px;letter-spacing:2px;color:var(--text-mid);padding:.75rem .5rem;text-align:left;border-bottom:2px solid var(--concrete-light);font-weight:500;}
     .product-table td{padding:.75rem .5rem;border-bottom:1px solid var(--concrete-light);font-size:13px;vertical-align:middle;}
     .product-table tr:hover td{background:rgba(247,245,240,0.5);}
@@ -329,7 +332,7 @@
     <!-- PRODUCTS -->
     <div class="admin-page" id="page-products">
       <h1>Productos</h1>
-      <p class="page-desc">Administra tu catálogo de productos</p>
+      <p class="page-desc">Administra tu catálogo de productos. Arrastra las filas para reordenarlas.</p>
 
       <div class="admin-card" style="display:flex;gap:.75rem;align-items:center;flex-wrap:wrap;padding:1rem;">
         <div style="flex:1;min-width:200px;position:relative;">
@@ -505,6 +508,15 @@
         <div class="toggle-field">
           <label class="toggle"><input type="checkbox" id="cfg-welcomePopup"><span class="toggle-slider"></span></label>
           <span class="toggle-label">Popup de bienvenida (primera visita, muestra cupón activo)</span>
+        </div>
+        <div class="field" style="max-width:360px;margin-top:1.25rem;">
+          <label>PRODUCTOS AGOTADOS EN EL CATÁLOGO</label>
+          <select id="cfg-soldOutBehavior">
+            <option value="show">Mostrar normal</option>
+            <option value="end">Mostrar al final</option>
+            <option value="hide">Ocultar del catálogo</option>
+          </select>
+          <small>Cómo tratar los productos sin stock/agotados en el catálogo.</small>
         </div>
       </div>
 
@@ -818,7 +830,8 @@
       </div>
       <div class="field">
         <label>BADGE / ETIQUETA</label>
-        <input type="text" id="edit-badge" placeholder="Ej: Nuevo, Oferta">
+        <input type="text" id="edit-badge" placeholder="Automático si lo dejas vacío">
+        <small>Déjalo vacío y el catálogo pone el badge solo: <strong>Oferta</strong> si hay precio rebajado, o <strong>Nuevo</strong> en los productos más recientes. Escribe algo aquí solo si quieres forzar un texto.</small>
       </div>
     </div>
     <div class="field">
@@ -1162,7 +1175,7 @@ function renderProductsTable(){
     tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:2rem;color:var(--text-mid);font-size:13px;"><i class="ti ti-search-off" style="font-size:32px;display:block;margin-bottom:8px;opacity:.4;"></i>No hay productos que coincidan con los filtros</td></tr>`;
     return;
   }
-  tbody.innerHTML = filtered.map((p,idx)=>`<tr>
+  tbody.innerHTML = filtered.map((p,idx)=>`<tr draggable="true" data-pid="${p.id}" ondragstart="prodDragStart(event)" ondragover="prodDragOver(event)" ondragleave="prodDragLeave(event)" ondrop="prodDrop(event)" ondragend="prodDragEnd(event)">
     <td><input type="checkbox" class="prod-check" value="${p.id}" onchange="updateBulkBar()"></td>
     <td><div class="prod-icon">${p.images&&p.images.length?`<img src="${p.images[0]}" alt="">`:(p.image?`<img src="${p.image}" alt="">`:(getIconSVGSmall(p.icon)))}</div></td>
     <td><span class="prod-name">${p.name}</span><br><span class="prod-cat">${p.cat}</span></td>
@@ -1353,6 +1366,7 @@ function loadConfigForm(){
   document.getElementById('cfg-enableWhatsApp').checked = config.enableWhatsApp!==false;
   document.getElementById('cfg-welcomePopup').checked = config.welcomePopupEnabled!==false;
   document.getElementById('cfg-freeShippingThreshold').value = config.freeShippingThreshold ? config.freeShippingThreshold : '';
+  document.getElementById('cfg-soldOutBehavior').value = config.soldOutBehavior || 'show';
   document.getElementById('cfg-adminPassword').value = '';
   renderPaymentMethodsEditor();
   renderShippingZonesEditor();
@@ -1374,6 +1388,7 @@ function saveConfigForm(){
   config.enableWhatsApp = document.getElementById('cfg-enableWhatsApp').checked;
   config.welcomePopupEnabled = document.getElementById('cfg-welcomePopup').checked;
   config.freeShippingThreshold = Math.max(0, parseInt(document.getElementById('cfg-freeShippingThreshold').value) || 0);
+  config.soldOutBehavior = document.getElementById('cfg-soldOutBehavior').value || 'show';
   // Cambio de contraseña (opcional): solo si se escribe una nueva.
   const pwEl = document.getElementById('cfg-adminPassword');
   const newPw = (pwEl.value || '');
@@ -2253,6 +2268,42 @@ function renderImagePreviews(){
   if(!c)return;
   if(!editImages.length){c.innerHTML='<p style="font-size:12px;color:var(--text-light);padding:.5rem;text-align:center;grid-column:1/-1;">Sin imagenes. Se usara el icono SVG.</p>';return;}
   c.innerHTML = editImages.map((src,i)=>`<div class="img-preview-item"><img src="${src}" alt="Imagen ${i+1}">${i===0?'<span class="img-cover-badge">Portada</span>':''}<button class="img-remove-btn" onclick="removeEditImage(${i})"><i class="ti ti-x" style="font-size:10px"></i></button></div>`).join('');
+}
+
+// PRODUCT REORDER — arrastrar y soltar filas
+let _dragPid = null;
+function prodDragStart(e){
+  _dragPid = parseInt(e.currentTarget.dataset.pid);
+  e.dataTransfer.effectAllowed = 'move';
+  try { e.dataTransfer.setData('text/plain', String(_dragPid)); } catch(_){}
+  e.currentTarget.classList.add('dragging');
+}
+function prodDragOver(e){
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  const tr = e.currentTarget;
+  if(parseInt(tr.dataset.pid) !== _dragPid) tr.classList.add('drag-over');
+}
+function prodDragLeave(e){ e.currentTarget.classList.remove('drag-over'); }
+function prodDragEnd(){
+  document.querySelectorAll('#products-tbody tr').forEach(tr => tr.classList.remove('dragging','drag-over'));
+  _dragPid = null;
+}
+function prodDrop(e){
+  e.preventDefault();
+  const targetPid = parseInt(e.currentTarget.dataset.pid);
+  document.querySelectorAll('#products-tbody tr').forEach(tr => tr.classList.remove('drag-over'));
+  if(_dragPid == null || _dragPid === targetPid) return;
+  const from = products.findIndex(p => p.id === _dragPid);
+  if(from < 0) return;
+  const [moved] = products.splice(from, 1);
+  let to = products.findIndex(p => p.id === targetPid);
+  if(to < 0) to = products.length;
+  products.splice(to, 0, moved);
+  saveProducts(products);
+  renderProductsTable();
+  markPendingChanges();
+  refreshPreview();
 }
 
 // PRODUCT REORDER
