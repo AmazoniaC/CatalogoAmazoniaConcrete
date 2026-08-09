@@ -737,9 +737,10 @@
           <li>En el menú <strong>Extensiones → Apps Script</strong>.</li>
           <li>Borra el código de ejemplo y <strong>pega el script de abajo</strong> (usa el botón Copiar).</li>
           <li>Cambia <code>SECRET</code> por una clave tuya y <code>ALERT_EMAIL</code> por tu correo.</li>
+          <li><strong>(Prueba, opcional)</strong> Arriba, en el selector de funciones elige <code>test</code> y pulsa <strong>Ejecutar</strong>. La primera vez Google pedirá autorizar permisos (acéptalos). Debe crear una fila en la Hoja y enviarte un email. <strong>Nunca ejecutes <code>doPost</code> a mano</strong> — da error porque no hay pedido; es normal.</li>
           <li><strong>Implementar → Nueva implementación → Aplicación web</strong>. En "Quién tiene acceso" elige <strong>Cualquiera</strong>. Autoriza los permisos.</li>
-          <li>Copia la <strong>URL del Web App</strong> y pégala arriba, junto con tu clave secreta. Guarda.</li>
-          <li>¡Listo! Cada pedido llegará a la Hoja, te avisará por email, y aparecerá aquí.</li>
+          <li>Copia la <strong>URL del Web App</strong> (termina en <code>/exec</code>) y pégala arriba, junto con tu clave secreta. Guarda.</li>
+          <li><strong>Publica</strong> el catálogo (para que use la URL) y ¡listo! Cada pedido llegará a la Hoja, te avisará por email, y aparecerá aquí.</li>
         </ol>
         <div style="display:flex;justify-content:flex-end;margin:.5rem 0;"><button class="btn btn-outline" onclick="copyOrdersScript()" style="font-size:12px;"><i class="ti ti-copy"></i> COPIAR SCRIPT</button></div>
         <pre id="orders-script-code" style="background:#1e1c18;color:#e8e4de;padding:1rem;border-radius:6px;overflow:auto;font-size:11px;line-height:1.5;max-height:340px;white-space:pre;"></pre>
@@ -1301,6 +1302,8 @@ function sheet_() {
 }
 
 function doPost(e) {
+  // Si ejecutas esta funcion a mano (boton Ejecutar) no hay datos: usa test().
+  if (!e || !e.postData) return ContentService.createTextOutput('Sin datos. Para probar usa la funcion test(); en produccion se llama sola por HTTP.');
   const data = JSON.parse(e.postData.contents || '{}');
   const sh = sheet_();
   if (data.action === 'status') {
@@ -1330,6 +1333,14 @@ function doGet(e) {
   const json = JSON.stringify(orders);
   if (p.callback) return ContentService.createTextOutput(p.callback + '(' + json + ')').setMimeType(ContentService.MimeType.JAVASCRIPT);
   return ContentService.createTextOutput(json).setMimeType(ContentService.MimeType.JSON);
+}
+
+// PRUEBA: selecciona "test" arriba y pulsa Ejecutar. Debe crear una fila en la
+// Hoja y enviarte un email. La primera vez Google pedira autorizar permisos.
+function test() {
+  const sh = sheet_();
+  sh.appendRow([new Date(), 'TEST-0001', 'Pendiente', '2x Producto de prueba = 50000', 50000, 0, '', 0, 'Medellin', 50000, '', 'Pedido de prueba']);
+  MailApp.sendEmail(ALERT_EMAIL, 'Pedido de prueba TEST-0001', 'Si recibes este correo, la conexion de pedidos funciona.');
 }`;
 
 function showAdminPage(id){
