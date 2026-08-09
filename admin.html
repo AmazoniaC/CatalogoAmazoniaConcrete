@@ -696,17 +696,53 @@
     <!-- ORDERS -->
     <div class="admin-page" id="page-orders">
       <h1>Pedidos</h1>
-      <p class="page-desc">Historial de pedidos realizados por WhatsApp</p>
+      <p class="page-desc">Pedidos recibidos automáticamente desde el catálogo.</p>
+
+      <div class="stats-grid" id="orders-stats" style="display:none;"></div>
+
       <div class="admin-card">
-        <p style="font-size:13px;color:var(--text-mid);line-height:1.8;">
-          Los pedidos se realizan directamente por <strong>WhatsApp</strong>. Cuando un cliente hace clic en "Hacer pedido por WhatsApp", se le redirige a tu WhatsApp con el detalle del pedido.<br><br>
-          Para un mejor seguimiento, te recomendamos:
-        </p>
-        <ul style="margin:1rem 0 0 1.5rem;font-size:13px;color:var(--text-mid);line-height:2;">
-          <li>Guardar los chats de pedidos con una etiqueta especial en WhatsApp</li>
-          <li>Usar WhatsApp Business para respuestas rapidas y etiquetas</li>
-          <li>Crear un registro manual en una hoja de calculo</li>
-        </ul>
+        <h3><i class="ti ti-plug-connected"></i> CONEXIÓN DE PEDIDOS AUTOMÁTICOS</h3>
+        <div class="field" style="max-width:640px;">
+          <label>URL DEL WEB APP (Google Apps Script)</label>
+          <input type="text" id="cfg-orderWebhookUrl" placeholder="https://script.google.com/macros/s/.../exec" autocomplete="off" spellcheck="false">
+        </div>
+        <div class="field" style="max-width:640px;">
+          <label>CLAVE SECRETA (la misma del script)</label>
+          <input type="password" id="cfg-orderSecret" placeholder="Tu clave secreta" autocomplete="off">
+          <small>Se guarda solo en este navegador (no se publica). Debe coincidir con <code>SECRET</code> en el script.</small>
+        </div>
+        <div class="btn-group">
+          <button class="btn btn-save" onclick="saveOrdersConfig()"><i class="ti ti-device-floppy"></i> GUARDAR CONEXIÓN</button>
+          <button class="btn btn-ghost" onclick="fetchOrders()"><i class="ti ti-refresh"></i> ACTUALIZAR</button>
+          <button class="btn btn-ghost" onclick="toggleOrdersGuide()"><i class="ti ti-help-circle"></i> CÓMO CONFIGURAR</button>
+        </div>
+        <p id="orders-status" style="font-size:12px;margin-top:.75rem;color:var(--text-mid);"></p>
+      </div>
+
+      <div class="admin-card" id="orders-table-card" style="display:none;">
+        <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:1rem;">
+          <input type="text" id="orders-search" placeholder="Buscar pedido o producto..." oninput="renderOrdersTable()" style="flex:1;min-width:180px;padding:.5rem .75rem;border:1px solid var(--concrete-light);border-radius:4px;font-family:'Jost',sans-serif;">
+          <select id="orders-filter-status" onchange="renderOrdersTable()" style="padding:.5rem;border:1px solid var(--concrete-light);border-radius:4px;font-family:'Jost',sans-serif;">
+            <option value="">Todos los estados</option>
+            <option>Pendiente</option><option>Pagado</option><option>Enviado</option><option>Entregado</option><option>Cancelado</option>
+          </select>
+        </div>
+        <div style="overflow-x:auto;"><table class="product-table"><thead><tr><th>Fecha</th><th>Pedido</th><th>Productos</th><th>Total</th><th>Ciudad</th><th>Estado</th></tr></thead><tbody id="orders-tbody"></tbody></table></div>
+      </div>
+
+      <div class="admin-card" id="orders-guide" style="display:none;">
+        <h3><i class="ti ti-list-check"></i> CÓMO CONFIGURAR (una sola vez, gratis)</h3>
+        <ol style="margin-left:1.4rem;font-size:13px;color:var(--text-mid);line-height:2;">
+          <li>Crea una <strong>Hoja de Google</strong> nueva (sheets.new).</li>
+          <li>En el menú <strong>Extensiones → Apps Script</strong>.</li>
+          <li>Borra el código de ejemplo y <strong>pega el script de abajo</strong> (usa el botón Copiar).</li>
+          <li>Cambia <code>SECRET</code> por una clave tuya y <code>ALERT_EMAIL</code> por tu correo.</li>
+          <li><strong>Implementar → Nueva implementación → Aplicación web</strong>. En "Quién tiene acceso" elige <strong>Cualquiera</strong>. Autoriza los permisos.</li>
+          <li>Copia la <strong>URL del Web App</strong> y pégala arriba, junto con tu clave secreta. Guarda.</li>
+          <li>¡Listo! Cada pedido llegará a la Hoja, te avisará por email, y aparecerá aquí.</li>
+        </ol>
+        <div style="display:flex;justify-content:flex-end;margin:.5rem 0;"><button class="btn btn-outline" onclick="copyOrdersScript()" style="font-size:12px;"><i class="ti ti-copy"></i> COPIAR SCRIPT</button></div>
+        <pre id="orders-script-code" style="background:#1e1c18;color:#e8e4de;padding:1rem;border-radius:6px;overflow:auto;font-size:11px;line-height:1.5;max-height:340px;white-space:pre;"></pre>
       </div>
     </div>
 
@@ -1145,6 +1181,157 @@ if(sessionStorage.getItem('admin_auth')==='1'){
 }
 
 // ADMIN PAGES
+// ===== PEDIDOS AUTOMÁTICOS (Google Apps Script) =====
+const ORDERS_SECRET_KEY = 'ac_orders_secret';
+let _ordersData = [];
+const ORDER_STATUSES = ['Pendiente','Pagado','Enviado','Entregado','Cancelado'];
+const ORDER_STATUS_COLOR = { Pendiente:'#b87355', Pagado:'#4a9e5a', Enviado:'#3a6ea5', Entregado:'#3d4a35', Cancelado:'#d94f4f' };
+
+function loadOrdersConfig(){
+  const u = document.getElementById('cfg-orderWebhookUrl'); if(u) u.value = config.orderWebhookUrl || '';
+  const s = document.getElementById('cfg-orderSecret'); if(s) s.value = localStorage.getItem(ORDERS_SECRET_KEY) || '';
+  const pre = document.getElementById('orders-script-code'); if(pre && !pre.textContent) pre.textContent = APPS_SCRIPT_CODE;
+}
+function saveOrdersConfig(){
+  config.orderWebhookUrl = (document.getElementById('cfg-orderWebhookUrl').value || '').trim();
+  localStorage.setItem(ORDERS_SECRET_KEY, (document.getElementById('cfg-orderSecret').value || '').trim());
+  saveConfig(config);
+  markPendingChanges();
+  showToast('Conexión guardada — recuerda publicar para que el catálogo la use');
+  fetchOrders();
+}
+function toggleOrdersGuide(){
+  const g = document.getElementById('orders-guide');
+  const pre = document.getElementById('orders-script-code');
+  if(pre && !pre.textContent) pre.textContent = APPS_SCRIPT_CODE;
+  if(g) g.style.display = g.style.display === 'none' ? 'block' : 'none';
+}
+function copyOrdersScript(){
+  navigator.clipboard.writeText(APPS_SCRIPT_CODE).then(()=>showToast('Script copiado — pégalo en Apps Script'));
+}
+function fetchOrders(){
+  const url = (config.orderWebhookUrl || '').trim();
+  const secret = localStorage.getItem(ORDERS_SECRET_KEY) || '';
+  const statusEl = document.getElementById('orders-status');
+  const setS = m => { if(statusEl) statusEl.textContent = m; };
+  if(!url){ setS('Configura la URL del Web App para ver tus pedidos aquí.'); return; }
+  setS('Cargando pedidos...');
+  const cb = '__ordersCb_' + Date.now();
+  let script = null;
+  const cleanup = () => { try{ delete window[cb]; }catch(e){ window[cb] = undefined; } if(script && script.parentNode) script.parentNode.removeChild(script); };
+  const timer = setTimeout(() => { cleanup(); setS('No se pudo conectar. Revisa la URL/clave y que el Web App esté desplegado para "Cualquiera".'); }, 12000);
+  window[cb] = function(data){
+    clearTimeout(timer); cleanup();
+    _ordersData = Array.isArray(data) ? data : [];
+    document.getElementById('orders-table-card').style.display = 'block';
+    renderOrdersStats(); renderOrdersTable();
+    setS(_ordersData.length ? (_ordersData.length + ' pedido(s). Última actualización: ' + new Date().toLocaleTimeString()) : 'Conectado ✓ — aún no hay pedidos.');
+  };
+  script = document.createElement('script');
+  script.src = url + (url.indexOf('?') >= 0 ? '&' : '?') + 'action=list&secret=' + encodeURIComponent(secret) + '&callback=' + cb + '&_=' + Date.now();
+  script.onerror = function(){ clearTimeout(timer); cleanup(); setS('Error al conectar con el Web App. Verifica la URL.'); };
+  document.body.appendChild(script);
+}
+function renderOrdersStats(){
+  const el = document.getElementById('orders-stats');
+  if(!el) return;
+  const valid = _ordersData.filter(o => o.status !== 'Cancelado');
+  const revenue = valid.reduce((a,o)=> a + (Number(o.total)||0), 0);
+  const count = _ordersData.length;
+  const avg = valid.length ? Math.round(revenue / valid.length) : 0;
+  const pend = _ordersData.filter(o => o.status === 'Pendiente').length;
+  const money = n => new Intl.NumberFormat('es-CO',{style:'currency',currency:config.currency||'COP',minimumFractionDigits:0}).format(n);
+  const card = (label,val,color) => `<div class="stat-card"><div class="stat-value" style="${color?'color:'+color:''}">${val}</div><div class="stat-label">${label}</div></div>`;
+  el.style.display = 'grid';
+  el.innerHTML = card('Pedidos', count) + card('Pendientes', pend, '#b87355') + card('Ingresos', money(revenue), '#4a9e5a') + card('Ticket promedio', money(avg));
+}
+function renderOrdersTable(){
+  const tb = document.getElementById('orders-tbody');
+  if(!tb) return;
+  const q = (document.getElementById('orders-search')?.value || '').toLowerCase();
+  const fst = document.getElementById('orders-filter-status')?.value || '';
+  const money = n => new Intl.NumberFormat('es-CO',{style:'currency',currency:config.currency||'COP',minimumFractionDigits:0}).format(Number(n)||0);
+  const rows = _ordersData.filter(o => {
+    if(fst && o.status !== fst) return false;
+    if(q && !((o.orderNum+'').toLowerCase().includes(q) || (o.items+'').toLowerCase().includes(q))) return false;
+    return true;
+  });
+  if(!rows.length){ tb.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:1.5rem;color:var(--text-mid);font-size:13px;">Sin pedidos que coincidan.</td></tr>`; return; }
+  tb.innerHTML = rows.map(o => {
+    const d = o.date ? new Date(o.date) : null;
+    const fecha = d && !isNaN(d.getTime()) ? d.toLocaleDateString('es-CO') + '<br><span style="font-size:10px;color:var(--text-light)">' + d.toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'}) + '</span>' : '';
+    const color = ORDER_STATUS_COLOR[o.status] || 'var(--text-mid)';
+    const opts = ORDER_STATUSES.map(s => `<option value="${s}" ${o.status===s?'selected':''}>${s}</option>`).join('');
+    return `<tr>
+      <td style="white-space:nowrap;font-size:12px;">${fecha}</td>
+      <td style="font-weight:600;white-space:nowrap;">${escOrder(o.orderNum)}</td>
+      <td style="font-size:12px;max-width:280px;">${escOrder(o.items)}${o.gift?' <span style="color:#b87355;">🎁</span>':''}</td>
+      <td style="font-weight:600;white-space:nowrap;">${money(o.total)}</td>
+      <td style="font-size:12px;">${escOrder(o.city)||'-'}</td>
+      <td><select onchange="updateOrderStatus('${escOrder(o.orderNum)}',this.value)" style="padding:.35rem .5rem;border:1px solid var(--concrete-light);border-radius:4px;font-family:'Jost',sans-serif;font-size:12px;font-weight:600;color:${color};">${opts}</select></td>
+    </tr>`;
+  }).join('');
+}
+function escOrder(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/'/g,'&#39;'); }
+function updateOrderStatus(orderNum, status){
+  const url = (config.orderWebhookUrl || '').trim();
+  const secret = localStorage.getItem(ORDERS_SECRET_KEY) || '';
+  if(!url) return;
+  const o = _ordersData.find(x => String(x.orderNum) === String(orderNum));
+  if(o) o.status = status; // actualización optimista
+  renderOrdersStats();
+  try{
+    fetch(url, { method:'POST', mode:'no-cors', keepalive:true, headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify({ action:'status', orderNum: orderNum, status: status, secret: secret }) });
+    showToast('Pedido ' + orderNum + ' → ' + status);
+  }catch(e){ showToast('No se pudo actualizar el estado'); }
+}
+
+const APPS_SCRIPT_CODE = `// ===== PEDIDOS AMAZONIA CONCRETE — pega esto en Apps Script =====
+const SECRET = 'CAMBIA-ESTA-CLAVE';        // usa la MISMA clave en el admin
+const ALERT_EMAIL = 'tucorreo@gmail.com';  // aqui te llegan los avisos
+const SHEET_NAME = 'Pedidos';
+
+function sheet_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sh = ss.getSheetByName(SHEET_NAME) || ss.insertSheet(SHEET_NAME);
+  if (sh.getLastRow() === 0) {
+    sh.appendRow(['Fecha','Pedido','Estado','Productos','Subtotal','Descuento','Cupon','Envio','Ciudad','Total','Regalo','Notas']);
+  }
+  return sh;
+}
+
+function doPost(e) {
+  const data = JSON.parse(e.postData.contents || '{}');
+  const sh = sheet_();
+  if (data.action === 'status') {
+    if (data.secret !== SECRET) return ContentService.createTextOutput('unauthorized');
+    const v = sh.getDataRange().getValues();
+    for (let i = 1; i < v.length; i++) {
+      if (String(v[i][1]) === String(data.orderNum)) { sh.getRange(i + 1, 3).setValue(data.status); break; }
+    }
+    return ContentService.createTextOutput('ok');
+  }
+  sh.appendRow([ new Date(), data.orderNum || '', 'Pendiente', data.itemsText || '',
+    data.subtotal || 0, data.discount || 0, data.coupon || '', data.shipping || 0,
+    data.shipCity || '', data.total || 0, data.isGift ? 'Si' : '', data.note || '' ]);
+  try { MailApp.sendEmail(ALERT_EMAIL, 'Nuevo pedido ' + (data.orderNum || ''),
+    (data.emailBody || 'Nuevo pedido') + '\\n\\nTotal: ' + (data.total || '')); } catch (err) {}
+  return ContentService.createTextOutput('ok');
+}
+
+function doGet(e) {
+  const p = e.parameter || {};
+  if (p.secret !== SECRET) return ContentService.createTextOutput('unauthorized');
+  const v = sheet_().getDataRange().getValues();
+  const orders = v.slice(1).map(function(r) {
+    return { date: r[0], orderNum: r[1], status: r[2], items: r[3], subtotal: r[4],
+      discount: r[5], coupon: r[6], shipping: r[7], city: r[8], total: r[9], gift: r[10], notes: r[11] };
+  }).reverse();
+  const json = JSON.stringify(orders);
+  if (p.callback) return ContentService.createTextOutput(p.callback + '(' + json + ')').setMimeType(ContentService.MimeType.JAVASCRIPT);
+  return ContentService.createTextOutput(json).setMimeType(ContentService.MimeType.JSON);
+}`;
+
 function showAdminPage(id){
   document.querySelectorAll('.admin-page').forEach(p=>p.classList.remove('active'));
   document.getElementById('page-'+id).classList.add('active');
@@ -1157,6 +1344,7 @@ function showAdminPage(id){
   if(id==='config') loadConfigForm();
   if(id==='content') loadContentForm();
   if(id==='publish') loadGitHubSettingsUI();
+  if(id==='orders'){ loadOrdersConfig(); fetchOrders(); }
 }
 
 function initAdmin(){
