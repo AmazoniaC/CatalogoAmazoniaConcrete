@@ -744,6 +744,7 @@
           <li><strong>Implementar → Nueva implementación → Aplicación web</strong>. En "Quién tiene acceso" elige <strong>Cualquiera</strong>. Autoriza los permisos.</li>
           <li>Copia la <strong>URL del Web App</strong> (termina en <code>/exec</code>) y pégala arriba, junto con tu clave secreta. Guarda.</li>
           <li><strong>Publica</strong> el catálogo (para que use la URL) y ¡listo! Cada pedido llegará a la Hoja, te avisará por email, y aparecerá aquí.</li>
+          <li><strong>(Resumen diario, opcional)</strong> En el selector de funciones elige <code>setupDailySummary</code> y pulsa <strong>Ejecutar</strong> <em>una sola vez</em>. A partir de ahí recibirás cada mañana (~8am) un correo con el resumen de ventas del día anterior: pedidos, ingresos, ticket promedio, estados y productos más vendidos.</li>
         </ol>
         <div style="display:flex;justify-content:flex-end;margin:.5rem 0;"><button class="btn btn-outline" onclick="copyOrdersScript()" style="font-size:12px;"><i class="ti ti-copy"></i> COPIAR SCRIPT</button></div>
         <pre id="orders-script-code" style="background:#1e1c18;color:#e8e4de;padding:1rem;border-radius:6px;overflow:auto;font-size:11px;line-height:1.5;max-height:340px;white-space:pre;"></pre>
@@ -1470,6 +1471,89 @@ function doPost(e) {
   }
   createOrder_(data); // respaldo por POST
   return ContentService.createTextOutput('ok');
+}
+
+// ----- RESUMEN DIARIO DE VENTAS -----
+function statCell_(label, value, color) {
+  return '<td style="padding:6px;width:33.33%;">'
+    + '<div style="background:#faf8f5;border:1px solid #ece8e2;border-radius:8px;padding:14px 8px;text-align:center;">'
+    + '<div style="font-size:20px;font-weight:700;color:' + (color || '#3d4a35') + ';line-height:1.2;">' + value + '</div>'
+    + '<div style="font-size:10px;letter-spacing:1px;color:#8a7f6f;margin-top:5px;text-transform:uppercase;">' + esc_(label) + '</div>'
+    + '</div></td>';
+}
+// Envia al dueno un resumen de los pedidos del dia anterior.
+function dailySummary() {
+  var owner = ownerEmail_();
+  if (!owner) return;
+  var tz = Session.getScriptTimeZone() || 'America/Bogota';
+  var now = new Date();
+  var start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1); // ayer 00:00
+  var end = new Date(now.getFullYear(), now.getMonth(), now.getDate());       // hoy 00:00
+  var fecha = Utilities.formatDate(start, tz, 'dd/MM/yyyy');
+
+  var v = sheet_().getDataRange().getValues();
+  var count = 0, revenue = 0, cancelled = 0, status = {}, products = {};
+  for (var i = 1; i < v.length; i++) {
+    var r = v[i];
+    var d = r[0] instanceof Date ? r[0] : new Date(r[0]);
+    if (isNaN(d.getTime()) || d < start || d >= end) continue;
+    count++;
+    var st = String(r[2] || 'Pendiente');
+    status[st] = (status[st] || 0) + 1;
+    if (st === 'Cancelado') cancelled++;
+    else revenue += Number(r[13]) || 0;
+    String(r[8] || '').split(' | ').filter(String).forEach(function(s) {
+      var left = s.split(' = ')[0] || '';
+      var mm = left.match(/^(\\d+)x\\s*(.*)$/);
+      var q = mm ? Number(mm[1]) : 1;
+      var n = mm ? mm[2] : left;
+      products[n] = (products[n] || 0) + q;
+    });
+  }
+
+  var validOrders = count - cancelled;
+  var avg = validOrders > 0 ? Math.round(revenue / validOrders) : 0;
+  var inner;
+  if (count === 0) {
+    inner = '<p style="margin:0;font-size:14px;color:#2a2620;">No se registraron pedidos el ' + fecha + '. Un dia tranquilo, manana sera mejor!</p>';
+  } else {
+    var stats = '<table role="presentation" style="width:100%;border-collapse:collapse;margin:4px 0 8px;"><tr>'
+      + statCell_('Pedidos', count, '#3d4a35')
+      + statCell_('Ingresos', money_(revenue, 'COP'), '#b87355')
+      + statCell_('Ticket prom.', money_(avg, 'COP'), '#7d8a58')
+      + '</tr></table>';
+    var order = ['Pendiente','Pagado','Enviado','Entregado','Cancelado'];
+    var statusRows = order.filter(function(k){ return status[k]; }).map(function(k){
+      return '<tr><td style="padding:5px 12px;color:#6b6560;">' + esc_(k) + '</td>'
+        + '<td style="padding:5px 12px;text-align:right;font-weight:600;">' + status[k] + '</td></tr>';
+    }).join('');
+    var topArr = Object.keys(products).map(function(k){ return { n:k, q:products[k] }; })
+      .sort(function(a,b){ return b.q - a.q; }).slice(0, 5);
+    var topRows = topArr.map(function(p){
+      return '<tr><td style="padding:5px 12px;color:#2a2620;">' + esc_(p.n) + '</td>'
+        + '<td style="padding:5px 12px;text-align:right;font-weight:600;color:#3d4a35;">' + p.q + '</td></tr>';
+    }).join('');
+    inner = '<p style="margin:0 0 6px;font-size:14px;color:#2a2620;">Resumen de ventas del <strong>' + fecha + '</strong>.</p>'
+      + stats
+      + (cancelled ? '<p style="margin:2px 0 0;font-size:12px;color:#9a948e;">Ingresos sin contar pedidos cancelados (' + cancelled + ').</p>' : '')
+      + '<h3 style="font-size:12px;letter-spacing:2px;color:#3d4a35;margin:22px 0 8px;">POR ESTADO</h3>'
+      + '<table style="width:100%;border-collapse:collapse;font-size:14px;background:#faf8f5;border-radius:6px;overflow:hidden;">' + statusRows + '</table>'
+      + (topRows ? '<h3 style="font-size:12px;letter-spacing:2px;color:#3d4a35;margin:22px 0 8px;">PRODUCTOS MAS VENDIDOS</h3>'
+          + '<table style="width:100%;border-collapse:collapse;font-size:14px;background:#faf8f5;border-radius:6px;overflow:hidden;">' + topRows + '</table>' : '');
+  }
+
+  var html = emailShell_('RESUMEN DEL ' + fecha, inner);
+  var text = STORE_NAME + ' - Resumen ' + fecha + '\\nPedidos: ' + count + '\\nIngresos: ' + money_(revenue, 'COP') + '\\nTicket promedio: ' + money_(avg, 'COP');
+  MailApp.sendEmail(owner, STORE_NAME + ' - Resumen de ventas ' + fecha, text, { htmlBody: html, name: STORE_NAME });
+}
+// PASO UNICO: selecciona "setupDailySummary" arriba y pulsa Ejecutar una sola vez.
+// Programa el envio automatico del resumen cada dia a las ~8am.
+function setupDailySummary() {
+  ScriptApp.getProjectTriggers().forEach(function(t){
+    if (t.getHandlerFunction() === 'dailySummary') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('dailySummary').timeBased().everyDays(1).atHour(8).create();
+  Logger.log('Listo: recibiras el resumen diario cada dia ~8am en ' + ownerEmail_());
 }
 
 // PRUEBA: selecciona "test" arriba y pulsa Ejecutar. Crea un pedido de ejemplo,
