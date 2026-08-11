@@ -745,6 +745,14 @@
           <li>Copia la <strong>URL del Web App</strong> (termina en <code>/exec</code>) y pégala arriba, junto con tu clave secreta. Guarda.</li>
           <li><strong>Publica</strong> el catálogo (para que use la URL) y ¡listo! Cada pedido llegará a la Hoja, te avisará por email, y aparecerá aquí.</li>
           <li><strong>(Resumen diario, opcional)</strong> En el selector de funciones elige <code>setupDailySummary</code> y pulsa <strong>Ejecutar</strong> <em>una sola vez</em>. A partir de ahí recibirás cada mañana (~8am) un correo con el resumen de ventas del día anterior: pedidos, ingresos, ticket promedio, estados y productos más vendidos.</li>
+          <li><strong>(Aviso por WhatsApp, opcional)</strong> Para recibir un mensaje al instante en tu WhatsApp con cada pedido:
+            <ol type="a" style="margin:.3rem 0 0 0;">
+              <li>Guarda en tus contactos el número <strong>+34&nbsp;644&nbsp;51&nbsp;95&nbsp;23</strong> (es el bot <em>CallMeBot</em>).</li>
+              <li>Desde tu WhatsApp, envíale este mensaje exacto: <code>I allow callmebot to send me messages</code></li>
+              <li>Te responderá con tu <strong>API key</strong> (un número). Cópiala.</li>
+              <li>En el script, arriba, pon tu número en <code>WHATSAPP_PHONE</code> (con indicativo, sin +, ej: <code>57</code>300…) y la clave en <code>WHATSAPP_APIKEY</code>. Vuelve a copiar/pegar el script y <strong>publica una nueva versión</strong>.</li>
+            </ol>
+            Es gratis. El correo sigue llegando igual como respaldo.</li>
         </ol>
         <div style="display:flex;justify-content:flex-end;margin:.5rem 0;"><button class="btn btn-outline" onclick="copyOrdersScript()" style="font-size:12px;"><i class="ti ti-copy"></i> COPIAR SCRIPT</button></div>
         <pre id="orders-script-code" style="background:#1e1c18;color:#e8e4de;padding:1rem;border-radius:6px;overflow:auto;font-size:11px;line-height:1.5;max-height:340px;white-space:pre;"></pre>
@@ -1300,11 +1308,24 @@ const ALERT_EMAIL = '';                    // opcional: si lo dejas vacio, se us
 const STORE_NAME = 'Amazonia Concrete';
 const LOGO_URL = 'https://amazoniac.github.io/CatalogoAmazoniaConcrete/logo.png'; // logo del encabezado del correo (deja '' para solo texto)
 const SHEET_NAME = 'Pedidos';
+// WhatsApp instantaneo (opcional, via CallMeBot). Deja ambos vacios para desactivar.
+const WHATSAPP_PHONE = '';                  // tu numero con indicativo, sin + ni espacios. Ej: 573001234567
+const WHATSAPP_APIKEY = '';                 // la clave que te da CallMeBot al activar (ver guia)
 
 // Correo del dueno: usa ALERT_EMAIL si esta puesto; si no, tu cuenta de Google.
 function ownerEmail_() {
   if (ALERT_EMAIL) return ALERT_EMAIL;
   try { return Session.getEffectiveUser().getEmail(); } catch (e) { return ''; }
+}
+// Aviso instantaneo por WhatsApp al dueno (via CallMeBot). Si no hay claves, no hace nada.
+function notifyWhatsApp_(text) {
+  if (!WHATSAPP_PHONE || !WHATSAPP_APIKEY) return;
+  try {
+    var url = 'https://api.callmebot.com/whatsapp.php?phone=' + encodeURIComponent(WHATSAPP_PHONE)
+      + '&apikey=' + encodeURIComponent(WHATSAPP_APIKEY)
+      + '&text=' + encodeURIComponent(text);
+    UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+  } catch (e) {}
 }
 const HEADERS = ['Fecha','Pedido','Estado','Cliente','Telefono','Correo','Direccion','Ciudad','Productos','Subtotal','Descuento','Cupon','Envio','Total','Pago','Regalo','Notas'];
 
@@ -1428,6 +1449,12 @@ function createOrder_(d) {
   const text = 'Pedido ' + orderNum + ' - ' + (d.name||'') + '\\nTotal: ' + money_(d.total, cur) + '\\n' + (d.items||'');
   const owner = ownerEmail_();
   if (owner) { try { MailApp.sendEmail(owner, 'Nuevo pedido ' + orderNum + ' - ' + (d.name||''), text, { htmlBody: emailHtml_(d, orderNum, true), name: STORE_NAME }); } catch (e) {} }
+  var waPhone = String(d.phone||'').replace(/[^0-9]/g,'');
+  notifyWhatsApp_('*Nuevo pedido ' + orderNum + '*\\n'
+    + (d.name||'') + (d.city ? ' - ' + d.city : '') + '\\n'
+    + 'Total: ' + money_(d.total, cur) + '\\n'
+    + (d.items||'') + '\\n'
+    + (waPhone ? 'Escribele: https://wa.me/' + waPhone : ''));
   if (d.email && /^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/.test(d.email)) {
     try { MailApp.sendEmail(d.email, STORE_NAME + ' - Recibimos tu pedido ' + orderNum, text, { htmlBody: emailHtml_(d, orderNum, false), name: STORE_NAME }); } catch (e) {}
   }
