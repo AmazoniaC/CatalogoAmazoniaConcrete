@@ -1583,6 +1583,22 @@ function setupDailySummary() {
   Logger.log('Listo: recibiras el resumen diario cada dia ~8am en ' + ownerEmail_());
 }
 
+// DIAGNOSTICO WHATSAPP: selecciona "testWhatsApp" arriba y pulsa Ejecutar.
+// Envia un mensaje de prueba y MUESTRA el resultado (mira "Registro de ejecucion").
+// La 1a vez Google pedira un permiso extra para "conectarse a un servicio externo": acepta.
+function testWhatsApp() {
+  if (!WHATSAPP_PHONE || !WHATSAPP_APIKEY) {
+    Logger.log('Faltan datos: revisa WHATSAPP_PHONE y WHATSAPP_APIKEY arriba en el script.');
+    return;
+  }
+  var url = 'https://api.callmebot.com/whatsapp.php?phone=' + encodeURIComponent(WHATSAPP_PHONE)
+    + '&apikey=' + encodeURIComponent(WHATSAPP_APIKEY)
+    + '&text=' + encodeURIComponent('Prueba de ' + STORE_NAME + ': si ves esto, WhatsApp quedo listo.');
+  var res = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+  Logger.log('Codigo HTTP: ' + res.getResponseCode());
+  Logger.log('Respuesta: ' + res.getContentText());
+}
+
 // PRUEBA: selecciona "test" arriba y pulsa Ejecutar. Crea un pedido de ejemplo,
 // guarda la fila y envia el email. La 1a vez Google pedira autorizar permisos.
 function test() {
