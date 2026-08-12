@@ -720,12 +720,20 @@
       </div>
 
       <div class="admin-card" id="orders-table-card" style="display:none;">
-        <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:1rem;">
-          <input type="text" id="orders-search" placeholder="Buscar pedido o producto..." oninput="renderOrdersTable()" style="flex:1;min-width:180px;padding:.5rem .75rem;border:1px solid var(--concrete-light);border-radius:4px;font-family:'Jost',sans-serif;">
-          <select id="orders-filter-status" onchange="renderOrdersTable()" style="padding:.5rem;border:1px solid var(--concrete-light);border-radius:4px;font-family:'Jost',sans-serif;">
+        <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin-bottom:1rem;">
+          <input type="text" id="orders-search" placeholder="Buscar pedido, cliente, ciudad o producto..." oninput="renderOrders()" style="flex:1;min-width:180px;padding:.5rem .75rem;border:1px solid var(--concrete-light);border-radius:4px;font-family:'Jost',sans-serif;">
+          <select id="orders-filter-status" onchange="renderOrders()" style="padding:.5rem;border:1px solid var(--concrete-light);border-radius:4px;font-family:'Jost',sans-serif;">
             <option value="">Todos los estados</option>
             <option>Pendiente</option><option>Pagado</option><option>Enviado</option><option>Entregado</option><option>Cancelado</option>
           </select>
+          <select id="orders-filter-period" onchange="renderOrders()" style="padding:.5rem;border:1px solid var(--concrete-light);border-radius:4px;font-family:'Jost',sans-serif;">
+            <option value="">Todo el tiempo</option>
+            <option value="today">Hoy</option>
+            <option value="7">Últimos 7 días</option>
+            <option value="30">Últimos 30 días</option>
+          </select>
+          <button class="btn btn-ghost" onclick="exportOrdersCsv()" style="font-size:12px;" title="Descargar los pedidos filtrados en Excel/CSV"><i class="ti ti-download"></i> CSV</button>
+          <span id="orders-count" style="font-size:12px;color:var(--text-mid);margin-left:auto;"></span>
         </div>
         <div style="overflow-x:auto;"><table class="product-table"><thead><tr><th>Fecha</th><th>Pedido</th><th>Cliente</th><th>Productos</th><th>Total</th><th>Ciudad</th><th>Estado</th></tr></thead><tbody id="orders-tbody"></tbody></table></div>
       </div>
@@ -1237,7 +1245,7 @@ function fetchOrders(){
     clearTimeout(timer); cleanup();
     _ordersData = Array.isArray(data) ? data : [];
     document.getElementById('orders-table-card').style.display = 'block';
-    renderOrdersStats(); renderOrdersTable();
+    renderOrders();
     setS(_ordersData.length ? (_ordersData.length + ' pedido(s). Última actualización: ' + new Date().toLocaleTimeString()) : 'Conectado ✓ — aún no hay pedidos.');
   };
   script = document.createElement('script');
@@ -1245,47 +1253,92 @@ function fetchOrders(){
   script.onerror = function(){ clearTimeout(timer); cleanup(); setS('Error al conectar con el Web App. Verifica la URL.'); };
   document.body.appendChild(script);
 }
+function ordersMoney(n){ return new Intl.NumberFormat('es-CO',{style:'currency',currency:config.currency||'COP',minimumFractionDigits:0}).format(Number(n)||0); }
+function ordersTimeAgo(d){
+  const s = (Date.now() - d.getTime())/1000;
+  if(s < 90) return 'recién';
+  if(s < 3600) return 'hace ' + Math.floor(s/60) + ' min';
+  if(s < 86400) return 'hace ' + Math.floor(s/3600) + ' h';
+  const days = Math.floor(s/86400);
+  return days < 30 ? 'hace ' + days + ' d' : '';
+}
+// Ámbito del dashboard: aplica periodo + búsqueda (NO el estado), ordenado del más reciente al más antiguo.
+function ordersScope(){
+  const q = (document.getElementById('orders-search')?.value || '').toLowerCase().trim();
+  const per = document.getElementById('orders-filter-period')?.value || '';
+  let minTime = 0;
+  if(per === 'today'){ const d = new Date(); d.setHours(0,0,0,0); minTime = d.getTime(); }
+  else if(per === '7'){ minTime = Date.now() - 7*864e5; }
+  else if(per === '30'){ minTime = Date.now() - 30*864e5; }
+  return _ordersData.filter(o => {
+    if(minTime){ const t = o.date ? new Date(o.date).getTime() : 0; if(!t || t < minTime) return false; }
+    if(q && !((o.orderNum+'').toLowerCase().includes(q) || (o.items+'').toLowerCase().includes(q) || (o.name+'').toLowerCase().includes(q) || (o.city+'').toLowerCase().includes(q) || (o.phone+'').toLowerCase().includes(q))) return false;
+    return true;
+  }).sort((a,b) => new Date(b.date||0) - new Date(a.date||0));
+}
+// Lo que se ve en la tabla: ámbito + filtro de estado.
+function getFilteredOrders(){
+  const fst = document.getElementById('orders-filter-status')?.value || '';
+  const list = ordersScope();
+  return fst ? list.filter(o => o.status === fst) : list;
+}
+function renderOrders(){ renderOrdersStats(); renderOrdersTable(); }
 function renderOrdersStats(){
   const el = document.getElementById('orders-stats');
   if(!el) return;
-  const valid = _ordersData.filter(o => o.status !== 'Cancelado');
+  const list = ordersScope();
+  const valid = list.filter(o => o.status !== 'Cancelado');
   const revenue = valid.reduce((a,o)=> a + (Number(o.total)||0), 0);
-  const count = _ordersData.length;
   const avg = valid.length ? Math.round(revenue / valid.length) : 0;
-  const pend = _ordersData.filter(o => o.status === 'Pendiente').length;
-  const money = n => new Intl.NumberFormat('es-CO',{style:'currency',currency:config.currency||'COP',minimumFractionDigits:0}).format(n);
+  const pend = list.filter(o => o.status === 'Pendiente').length;
   const card = (label,val,color) => `<div class="stat-card"><div class="stat-value" style="${color?'color:'+color:''}">${val}</div><div class="stat-label">${label}</div></div>`;
   el.style.display = 'grid';
-  el.innerHTML = card('Pedidos', count) + card('Pendientes', pend, '#b87355') + card('Ingresos', money(revenue), '#4a9e5a') + card('Ticket promedio', money(avg));
+  el.innerHTML = card('Pedidos', list.length) + card('Pendientes', pend, '#b87355') + card('Ingresos', ordersMoney(revenue), '#4a9e5a') + card('Ticket promedio', ordersMoney(avg));
 }
 function renderOrdersTable(){
   const tb = document.getElementById('orders-tbody');
   if(!tb) return;
-  const q = (document.getElementById('orders-search')?.value || '').toLowerCase();
-  const fst = document.getElementById('orders-filter-status')?.value || '';
-  const money = n => new Intl.NumberFormat('es-CO',{style:'currency',currency:config.currency||'COP',minimumFractionDigits:0}).format(Number(n)||0);
-  const rows = _ordersData.filter(o => {
-    if(fst && o.status !== fst) return false;
-    if(q && !((o.orderNum+'').toLowerCase().includes(q) || (o.items+'').toLowerCase().includes(q) || (o.name+'').toLowerCase().includes(q))) return false;
-    return true;
-  });
+  const rows = getFilteredOrders();
+  const countEl = document.getElementById('orders-count');
+  if(countEl) countEl.textContent = rows.length + ' de ' + _ordersData.length + ' pedido(s)';
   if(!rows.length){ tb.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:1.5rem;color:var(--text-mid);font-size:13px;">Sin pedidos que coincidan.</td></tr>`; return; }
   tb.innerHTML = rows.map(o => {
     const d = o.date ? new Date(o.date) : null;
-    const fecha = d && !isNaN(d.getTime()) ? d.toLocaleDateString('es-CO') + '<br><span style="font-size:10px;color:var(--text-light)">' + d.toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'}) + '</span>' : '';
+    const valid = d && !isNaN(d.getTime());
+    const ago = valid ? ordersTimeAgo(d) : '';
+    const fecha = valid ? d.toLocaleDateString('es-CO') + '<br><span style="font-size:10px;color:var(--text-light)">' + d.toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'}) + (ago?' · '+ago:'') + '</span>' : '';
     const color = ORDER_STATUS_COLOR[o.status] || 'var(--text-mid)';
     const opts = ORDER_STATUSES.map(s => `<option value="${s}" ${o.status===s?'selected':''}>${s}</option>`).join('');
     const cliente = o.name ? `<span style="font-weight:600;">${escOrder(o.name)}</span>${o.phone?`<br><a href="https://wa.me/${(o.phone+'').replace(/[^0-9]/g,'')}" target="_blank" style="font-size:11px;color:var(--green-mid);text-decoration:none;">${escOrder(o.phone)}</a>`:''}${o.address?`<br><span style="font-size:10px;color:var(--text-light);" title="${escOrder(o.address)}">${escOrder((o.address+'').slice(0,32))}${(o.address+'').length>32?'…':''}</span>`:''}` : '<span style="color:var(--text-light);">-</span>';
-    return `<tr>
+    const pendStyle = o.status === 'Pendiente' ? ' style="box-shadow:inset 3px 0 0 #b87355;"' : '';
+    return `<tr${pendStyle}>
       <td style="white-space:nowrap;font-size:12px;">${fecha}</td>
       <td style="font-weight:600;white-space:nowrap;">${escOrder(o.orderNum)}</td>
       <td style="font-size:12px;min-width:150px;">${cliente}</td>
       <td style="font-size:12px;max-width:260px;">${escOrder(o.items)}${o.gift?' <span style="color:#b87355;">🎁</span>':''}</td>
-      <td style="font-weight:600;white-space:nowrap;">${money(o.total)}</td>
+      <td style="font-weight:600;white-space:nowrap;">${ordersMoney(o.total)}</td>
       <td style="font-size:12px;">${escOrder(o.city)||'-'}</td>
       <td><select onchange="updateOrderStatus('${escOrder(o.orderNum)}',this.value)" style="padding:.35rem .5rem;border:1px solid var(--concrete-light);border-radius:4px;font-family:'Jost',sans-serif;font-size:12px;font-weight:600;color:${color};">${opts}</select></td>
     </tr>`;
   }).join('');
+}
+function exportOrdersCsv(){
+  const list = getFilteredOrders();
+  if(!list.length){ showToast('No hay pedidos para exportar'); return; }
+  const cols = ['Fecha','Pedido','Estado','Cliente','Telefono','Correo','Direccion','Ciudad','Productos','Total'];
+  const esc = v => { v = String(v==null?'':v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g,'""') + '"' : v; };
+  const lines = [cols.join(',')];
+  list.forEach(o => {
+    const d = o.date ? new Date(o.date) : null;
+    lines.push([ d && !isNaN(d.getTime()) ? d.toLocaleString('es-CO') : '', o.orderNum, o.status, o.name, o.phone, o.email, o.address, o.city, o.items, o.total ].map(esc).join(','));
+  });
+  const blob = new Blob(['﻿' + lines.join('\r\n')], { type:'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'pedidos-' + new Date().toISOString().slice(0,10) + '.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  showToast(list.length + ' pedido(s) exportados');
 }
 function escOrder(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/'/g,'&#39;'); }
 function updateOrderStatus(orderNum, status){
@@ -1294,7 +1347,7 @@ function updateOrderStatus(orderNum, status){
   if(!url) return;
   const o = _ordersData.find(x => String(x.orderNum) === String(orderNum));
   if(o) o.status = status; // actualización optimista
-  renderOrdersStats();
+  renderOrders();
   try{
     fetch(url, { method:'POST', mode:'no-cors', keepalive:true, headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify({ action:'status', orderNum: orderNum, status: status, secret: secret }) });
     const notifies = ['Pagado','Enviado','Entregado','Cancelado'].indexOf(status) >= 0;
