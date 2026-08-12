@@ -761,6 +761,7 @@
               <li>En el script, arriba, pon tu número en <code>WHATSAPP_PHONE</code> (con indicativo, sin +, ej: <code>57</code>300…) y la clave en <code>WHATSAPP_APIKEY</code>. Vuelve a copiar/pegar el script y <strong>publica una nueva versión</strong>.</li>
             </ol>
             Es gratis. El correo sigue llegando igual como respaldo.</li>
+          <li><strong>(Aviso de pedidos sin atender, opcional)</strong> En el selector de funciones elige <code>setupPendingAlerts</code> y pulsa <strong>Ejecutar</strong> <em>una sola vez</em>. Desde ahí, cada hora revisa tus pedidos y te avisa (correo y WhatsApp) si alguno lleva más de <strong>6 horas</strong> en <em>Pendiente</em>, para que no se te escape ninguna venta. Puedes cambiar las horas en <code>PENDING_ALERT_HOURS</code> arriba en el script.</li>
         </ol>
         <div style="display:flex;justify-content:flex-end;margin:.5rem 0;"><button class="btn btn-outline" onclick="copyOrdersScript()" style="font-size:12px;"><i class="ti ti-copy"></i> COPIAR SCRIPT</button></div>
         <pre id="orders-script-code" style="background:#1e1c18;color:#e8e4de;padding:1rem;border-radius:6px;overflow:auto;font-size:11px;line-height:1.5;max-height:340px;white-space:pre;"></pre>
@@ -1364,6 +1365,7 @@ const SHEET_NAME = 'Pedidos';
 // WhatsApp instantaneo (opcional, via CallMeBot). Deja ambos vacios para desactivar.
 const WHATSAPP_PHONE = '';                  // tu numero con indicativo, sin + ni espacios. Ej: 573001234567
 const WHATSAPP_APIKEY = '';                 // la clave que te da CallMeBot al activar (ver guia)
+const PENDING_ALERT_HOURS = 6;              // avisar si un pedido lleva mas de X horas en "Pendiente"
 
 // Correo del dueno: usa ALERT_EMAIL si esta puesto; si no, tu cuenta de Google.
 function ownerEmail_() {
@@ -1634,6 +1636,68 @@ function setupDailySummary() {
   });
   ScriptApp.newTrigger('dailySummary').timeBased().everyDays(1).atHour(8).create();
   Logger.log('Listo: recibiras el resumen diario cada dia ~8am en ' + ownerEmail_());
+}
+
+// ----- AVISO DE PEDIDOS SIN ATENDER -----
+function pendingRowsHtml_(list) {
+  return list.map(function(x) {
+    var phone = String(x.o.phone||'').replace(/[^0-9]/g,'');
+    return '<tr>'
+      + '<td style="padding:8px 12px;border-bottom:1px solid #ece8e2;font-weight:600;white-space:nowrap;">' + esc_(x.o.orderNum) + '</td>'
+      + '<td style="padding:8px 12px;border-bottom:1px solid #ece8e2;">' + esc_(x.o.name) + (x.o.city ? '<br><span style="color:#8a7f6f;font-size:12px;">' + esc_(x.o.city) + '</span>' : '') + '</td>'
+      + '<td style="padding:8px 12px;border-bottom:1px solid #ece8e2;white-space:nowrap;">' + (phone ? '<a href="https://wa.me/' + phone + '" style="color:#3d4a35;text-decoration:none;">' + esc_(x.o.phone) + '</a>' : '-') + '</td>'
+      + '<td style="padding:8px 12px;border-bottom:1px solid #ece8e2;text-align:right;font-weight:600;white-space:nowrap;">' + money_(x.o.total, 'COP') + '</td>'
+      + '<td style="padding:8px 12px;border-bottom:1px solid #ece8e2;text-align:right;color:#b87355;white-space:nowrap;">' + x.hrs + ' h</td>'
+      + '</tr>';
+  }).join('');
+}
+// Revisa la Hoja y avisa (correo + WhatsApp) por cada pedido que lleva demasiado
+// tiempo en "Pendiente". No repite el aviso del mismo pedido (usa una marca guardada).
+function checkPending() {
+  var owner = ownerEmail_();
+  var v = sheet_().getDataRange().getValues();
+  var now = Date.now();
+  var thresh = PENDING_ALERT_HOURS * 3600000;
+  var props = PropertiesService.getScriptProperties();
+  var alerted = {};
+  try { alerted = JSON.parse(props.getProperty('pendingAlerted') || '{}'); } catch (e) {}
+  var newAlerted = {}, newly = [];
+  for (var i = 1; i < v.length; i++) {
+    var r = v[i];
+    if (String(r[2]) !== 'Pendiente') continue;
+    var d = r[0] instanceof Date ? r[0] : new Date(r[0]);
+    if (isNaN(d.getTime())) continue;
+    var age = now - d.getTime();
+    if (age < thresh) continue;
+    var num = String(r[1]);
+    newAlerted[num] = true;
+    if (!alerted[num]) newly.push({ o: rowToOrder_(r), hrs: Math.floor(age / 3600000) });
+  }
+  props.setProperty('pendingAlerted', JSON.stringify(newAlerted)); // solo los que siguen pendientes: se auto-limpia
+  if (!newly.length) return;
+
+  if (owner) {
+    var head = '<tr style="background:#3d4a35;color:#fff;">'
+      + '<th align="left" style="padding:8px 12px;font-size:11px;font-weight:600;">PEDIDO</th>'
+      + '<th align="left" style="padding:8px 12px;font-size:11px;font-weight:600;">CLIENTE</th>'
+      + '<th align="left" style="padding:8px 12px;font-size:11px;font-weight:600;">WHATSAPP</th>'
+      + '<th align="right" style="padding:8px 12px;font-size:11px;font-weight:600;">TOTAL</th>'
+      + '<th align="right" style="padding:8px 12px;font-size:11px;font-weight:600;">ESPERA</th></tr>';
+    var inner = '<p style="margin:0 0 6px;font-size:14px;color:#2a2620;">Tienes <strong>' + newly.length + ' pedido(s)</strong> en estado <strong>Pendiente</strong> desde hace mas de ' + PENDING_ALERT_HOURS + ' horas. Contacta al cliente para no perder la venta.</p>'
+      + '<table style="width:100%;border-collapse:collapse;font-size:14px;margin-top:10px;">' + head + pendingRowsHtml_(newly) + '</table>';
+    try { MailApp.sendEmail(owner, STORE_NAME + ' - ' + newly.length + ' pedido(s) sin atender', 'Tienes pedidos pendientes hace mas de ' + PENDING_ALERT_HOURS + 'h. Revisa el panel.', { htmlBody: emailShell_('PEDIDOS SIN ATENDER', inner), name: STORE_NAME }); } catch (e) {}
+  }
+  var lines = newly.slice(0, 8).map(function(x){ return x.o.orderNum + ' - ' + (x.o.name||'') + ' - ' + money_(x.o.total, 'COP') + ' (' + x.hrs + 'h)'; });
+  notifyWhatsApp_('*Pedidos sin atender: ' + newly.length + '*\\nMas de ' + PENDING_ALERT_HOURS + 'h en Pendiente:\\n' + lines.join('\\n'));
+}
+// PASO UNICO: selecciona "setupPendingAlerts" arriba y pulsa Ejecutar una sola vez.
+// Programa la revision automatica cada hora.
+function setupPendingAlerts() {
+  ScriptApp.getProjectTriggers().forEach(function(t){
+    if (t.getHandlerFunction() === 'checkPending') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('checkPending').timeBased().everyHours(1).create();
+  Logger.log('Listo: revisare los pendientes cada hora y te avisare si alguno pasa de ' + PENDING_ALERT_HOURS + 'h.');
 }
 
 // DIAGNOSTICO WHATSAPP: selecciona "testWhatsApp" arriba y pulsa Ejecutar.
