@@ -1591,16 +1591,24 @@ function renderFilters() {
     rawCats.length = 0;
     ordered.forEach(c => rawCats.push(c));
   }
-  const cats = ['Todos', ...rawCats];
-  if (favorites.length) cats.push('Favoritos');
-  fb.innerHTML = cats.map(c => {
-    const icon = c === 'Favoritos' ? '<i class="ti ti-heart" style="font-size:14px;vertical-align:-1px;margin-right:2px;"></i> ' : '';
-    let count = '';
-    if (c === 'Todos') count = ` (${activeProducts.length})`;
-    else if (c === 'Favoritos') count = ` (${favorites.length})`;
-    else count = ` (${activeProducts.filter(p => p.cat === c).length})`;
-    return `<button class="filter-btn${c === activeFilter ? ' active' : ''}" onclick="setFilter('${c}')">${icon}${c.toUpperCase()}${count}</button>`;
-  }).join('');
+  // Con una sola categoria, "Todos" y la categoria muestran lo mismo: ocultamos la barra
+  // para que un catalogo pequeño se vea intencional y no redundante.
+  if (rawCats.length <= 1 && !favorites.length) {
+    fb.style.display = 'none';
+    fb.innerHTML = '';
+  } else {
+    fb.style.display = '';
+    const cats = ['Todos', ...rawCats];
+    if (favorites.length) cats.push('Favoritos');
+    fb.innerHTML = cats.map(c => {
+      const icon = c === 'Favoritos' ? '<i class="ti ti-heart" style="font-size:14px;vertical-align:-1px;margin-right:2px;"></i> ' : '';
+      let count = '';
+      if (c === 'Todos') count = ` (${activeProducts.length})`;
+      else if (c === 'Favoritos') count = ` (${favorites.length})`;
+      else count = ` (${activeProducts.filter(p => p.cat === c).length})`;
+      return `<button class="filter-btn${c === activeFilter ? ' active' : ''}" onclick="setFilter('${c}')">${icon}${c.toUpperCase()}${count}</button>`;
+    }).join('');
+  }
 
   const maxP = Math.max(...activeProducts.map(p => p.price), 50000);
   priceRangeMax = Math.ceil(maxP / 10000) * 10000;
