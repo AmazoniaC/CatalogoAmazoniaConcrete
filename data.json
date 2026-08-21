@@ -42,8 +42,8 @@
     ],
     "shippingZones": [
       {
-        "city": "Medellín y área metropolitana",
-        "cost": 0,
+        "city": "Medellín",
+        "cost": 10000,
         "days": "1-2 días hábiles"
       },
       {
