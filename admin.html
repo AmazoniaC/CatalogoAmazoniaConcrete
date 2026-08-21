@@ -612,7 +612,11 @@
       </div>
 
       <div class="admin-card">
-        <h3><i class="ti ti-home"></i> PAGINA DE INICIO (HERO)</h3>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:.5rem;flex-wrap:wrap;">
+          <h3 style="margin:0;"><i class="ti ti-home"></i> PAGINA DE INICIO (HERO)</h3>
+          <button type="button" class="btn btn-outline" id="ai-hero-btn" onclick="generateHeroAI()" style="font-size:11px;padding:.35rem .7rem;"><i class="ti ti-sparkles"></i> GENERAR CON IA</button>
+        </div>
+        <p style="font-size:12px;color:var(--text-mid);margin:.5rem 0 1rem;">La IA propone el texto superior, el título (con una palabra resaltada) y la descripción del inicio.</p>
         <div class="field">
           <label>TEXTO SUPERIOR (EYEBROW)</label>
           <input type="text" id="cnt-heroEyebrow" value="">
@@ -2112,6 +2116,24 @@ function generateAboutAI(){
   });
 }
 
+function generateHeroAI(){
+  return runAiButton('ai-hero-btn', async () => {
+    const prompt = 'Eres el redactor de "' + storeName_() + '", ' + BRAND_CONTEXT + '. '
+      + 'Escribe el texto de portada (hero) de la pagina de inicio en espanol de Colombia. '
+      + 'Devuelve EXACTAMENTE 3 lineas, sin comillas ni etiquetas de lista: '
+      + 'Linea 1: un texto superior corto en MAYUSCULAS (3 a 5 palabras). '
+      + 'Linea 2: un titulo principal potente (4 a 8 palabras) con UNA palabra clave envuelta en <em> y </em> para resaltarla. '
+      + 'Linea 3: una descripcion de una sola frase (maximo 20 palabras). '
+      + 'Tono calido, artesanal y natural. No inventes datos ni cifras.';
+    const text = await callGeminiAI(prompt, { max: 220, temp: 0.9 });
+    if(!text) return;
+    const lines = text.split('\n').map(s => s.trim()).filter(Boolean);
+    if(lines[0]) document.getElementById('cnt-heroEyebrow').value = lines[0].replace(/^#+\s*/, '').toUpperCase();
+    if(lines[1]) document.getElementById('cnt-heroTitle').value = lines[1];
+    if(lines[2]) document.getElementById('cnt-heroDesc').value = lines[2];
+    showToast('Texto del inicio generado — revísalo y ajústalo');
+  });
+}
 function populateIgProducts(){
   const sel = document.getElementById('ig-product');
   if(!sel) return;
