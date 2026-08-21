@@ -444,6 +444,19 @@
       </div>
 
       <div class="admin-card">
+        <h3><i class="ti ti-sparkles"></i> ASISTENTE DE IA (GENERAR TEXTOS)</h3>
+        <p style="font-size:13px;color:var(--text-mid);margin-bottom:1rem;">Con una clave <strong>gratuita</strong> de Google Gemini, el panel puede escribir descripciones de productos por ti. La clave se guarda <strong>solo en este navegador</strong> — nunca se publica en el catálogo.</p>
+        <div class="field" style="max-width:640px;">
+          <label>CLAVE API DE GEMINI (GRATIS)</label>
+          <input type="password" id="cfg-aiKey" placeholder="Pega aquí tu clave de Google AI Studio" autocomplete="off" spellcheck="false">
+          <small>Consíguela gratis en <strong>aistudio.google.com/apikey</strong> → "Create API key". Es gratis y no se sube al catálogo.</small>
+        </div>
+        <div class="btn-group">
+          <button class="btn btn-save" onclick="saveAiKey()"><i class="ti ti-device-floppy"></i> GUARDAR CLAVE</button>
+        </div>
+      </div>
+
+      <div class="admin-card">
         <h3><i class="ti ti-building-store"></i> DATOS DE LA TIENDA</h3>
         <div class="field-row">
           <div class="field">
@@ -893,7 +906,10 @@
       </div>
     </div>
     <div class="field">
-      <label>DESCRIPCION</label>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:.5rem;margin-bottom:.35rem;">
+        <label style="margin:0;">DESCRIPCION</label>
+        <button type="button" class="btn btn-outline" id="ai-desc-btn" onclick="generateDescriptionAI()" style="font-size:11px;padding:.35rem .7rem;"><i class="ti ti-sparkles"></i> GENERAR CON IA</button>
+      </div>
       <textarea id="edit-desc" placeholder="Descripcion detallada del producto..."></textarea>
     </div>
     <div class="field">
@@ -1988,9 +2004,56 @@ function duplicateProduct(id){
   showToast('Producto duplicado - Recuerda publicar');
 }
 
+// ASISTENTE DE IA (Google Gemini, clave gratuita guardada solo en este navegador)
+const AI_KEY_STORE = 'ac_ai_key';
+function loadAiKey(){ const el = document.getElementById('cfg-aiKey'); if(el) el.value = localStorage.getItem(AI_KEY_STORE) || ''; }
+function saveAiKey(){
+  localStorage.setItem(AI_KEY_STORE, (document.getElementById('cfg-aiKey').value || '').trim());
+  showToast('Clave de IA guardada en este navegador');
+}
+async function generateDescriptionAI(){
+  const key = (localStorage.getItem(AI_KEY_STORE) || '').trim();
+  if(!key){ showToast('Primero pega tu clave gratuita en Configuración → Asistente de IA'); showAdminPage('config'); return; }
+  const val = id => (document.getElementById(id).value || '').trim();
+  const name = val('edit-name');
+  if(!name){ showToast('Escribe primero el nombre del producto'); return; }
+  const cat = val('edit-cat'), material = val('edit-material'), dims = val('edit-dimensions'), colors = val('edit-colors');
+  const store = (config && config.storeName) || 'Amazonia Concrete';
+  const btn = document.getElementById('ai-desc-btn');
+  const prev = btn.innerHTML; btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2"></i> Generando...';
+  const prompt = 'Eres el redactor de una tienda artesanal colombiana llamada "' + store + '" que hace piezas de decoracion en concreto hechas a mano. '
+    + 'Escribe UNA descripcion de producto atractiva y calida en espanol de Colombia, de 2 a 3 frases (maximo 55 palabras), sin titulos ni comillas, lista para publicar. '
+    + 'Resalta que es artesanal, hecha a mano y unica, y sugiere un uso o lugar donde queda bien. '
+    + 'No inventes medidas ni materiales que no aparezcan abajo. '
+    + 'Producto: ' + name + '.'
+    + (cat ? ' Categoria: ' + cat + '.' : '')
+    + (material ? ' Material: ' + material + '.' : '')
+    + (dims ? ' Medidas: ' + dims + '.' : '')
+    + (colors ? ' Colores: ' + colors + '.' : '');
+  try{
+    const resp = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + encodeURIComponent(key), {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }], generationConfig:{ temperature:0.9, maxOutputTokens:220 } })
+    });
+    const data = await resp.json();
+    if(!resp.ok){ throw new Error((data.error && data.error.message) || ('HTTP ' + resp.status)); }
+    const cand = (data.candidates || [])[0] || {};
+    const parts = (cand.content && cand.content.parts) || [];
+    const text = (parts[0] && parts[0].text || '').trim();
+    if(!text){ throw new Error('la IA no devolvio texto'); }
+    document.getElementById('edit-desc').value = text;
+    showToast('Descripción generada — revísala y ajústala a tu gusto');
+  }catch(e){
+    showToast('No se pudo generar: ' + (e.message || 'error de conexión'));
+  }finally{
+    btn.disabled = false; btn.innerHTML = prev;
+  }
+}
+
 // CONFIG FORM
 function loadConfigForm(){
   config = getConfig();
+  loadAiKey();
   document.getElementById('cfg-storeName').value = config.storeName||'';
   document.getElementById('cfg-currency').value = config.currency||'COP';
   document.getElementById('cfg-footerText').value = config.footerText||'';
