@@ -629,7 +629,11 @@
       </div>
 
       <div class="admin-card">
-        <h3><i class="ti ti-users"></i> PAGINA NOSOTROS</h3>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:.5rem;flex-wrap:wrap;">
+          <h3 style="margin:0;"><i class="ti ti-users"></i> PAGINA NOSOTROS</h3>
+          <button type="button" class="btn btn-outline" id="ai-about-btn" onclick="generateAboutAI()" style="font-size:11px;padding:.35rem .7rem;"><i class="ti ti-sparkles"></i> GENERAR CON IA</button>
+        </div>
+        <p style="font-size:12px;color:var(--text-mid);margin:.5rem 0 1rem;">La IA escribe la historia de tu marca. Rellena el título y los dos párrafos; revísalos y ajústalos a tu gusto.</p>
         <div class="field">
           <label>TITULO</label>
           <input type="text" id="cnt-aboutTitle" value="">
@@ -649,6 +653,31 @@
         <p style="font-size:12px;color:var(--text-mid);margin-bottom:1rem;">Números que aparecen en el banner animado de la página de inicio.</p>
         <div id="stats-editor"></div>
         <button class="btn btn-outline" onclick="addStat()" style="margin-top:.75rem;font-size:12px;"><i class="ti ti-plus"></i> Agregar estadistica</button>
+      </div>
+
+      <div class="admin-card">
+        <h3><i class="ti ti-brand-instagram"></i> PUBLICACIÓN PARA INSTAGRAM (IA)</h3>
+        <p style="font-size:12px;color:var(--text-mid);margin-bottom:1rem;">Genera un texto listo para publicar en Instagram (con emojis y hashtags). Elige un producto o escribe el tema, genera y copia.</p>
+        <div class="field-row">
+          <div class="field">
+            <label>PRODUCTO (opcional)</label>
+            <select id="ig-product"><option value="">— Tema libre —</option></select>
+          </div>
+          <div class="field">
+            <label>TEMA / OCASIÓN (opcional)</label>
+            <input type="text" id="ig-topic" placeholder="Ej: ideas para regalar, novedad, Día de la Madre">
+          </div>
+        </div>
+        <div class="btn-group" style="margin-bottom:.75rem;">
+          <button type="button" class="btn btn-add" id="ai-ig-btn" onclick="generateInstagramAI()"><i class="ti ti-sparkles"></i> GENERAR PUBLICACIÓN</button>
+        </div>
+        <div class="field">
+          <label>TEXTO GENERADO</label>
+          <textarea id="ig-output" rows="7" placeholder="Aquí aparecerá tu publicación..."></textarea>
+        </div>
+        <div class="btn-group">
+          <button type="button" class="btn btn-outline" onclick="copyInstagramText()" style="font-size:12px;"><i class="ti ti-copy"></i> COPIAR TEXTO</button>
+        </div>
       </div>
 
       <div class="admin-card">
@@ -2011,43 +2040,114 @@ function saveAiKey(){
   localStorage.setItem(AI_KEY_STORE, (document.getElementById('cfg-aiKey').value || '').trim());
   showToast('Clave de IA guardada en este navegador');
 }
-async function generateDescriptionAI(){
+// Núcleo: llama a Gemini con un prompt y devuelve el texto (o null si falta la clave).
+async function callGeminiAI(prompt, opts){
+  opts = opts || {};
   const key = (localStorage.getItem(AI_KEY_STORE) || '').trim();
-  if(!key){ showToast('Primero pega tu clave gratuita en Configuración → Asistente de IA'); showAdminPage('config'); return; }
-  const val = id => (document.getElementById(id).value || '').trim();
-  const name = val('edit-name');
-  if(!name){ showToast('Escribe primero el nombre del producto'); return; }
-  const cat = val('edit-cat'), material = val('edit-material'), dims = val('edit-dimensions'), colors = val('edit-colors');
-  const store = (config && config.storeName) || 'Amazonia Concrete';
-  const btn = document.getElementById('ai-desc-btn');
+  if(!key){ showToast('Primero pega tu clave gratuita en Configuración → Asistente de IA'); showAdminPage('config'); return null; }
+  const resp = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + encodeURIComponent(key), {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }], generationConfig:{ temperature: opts.temp != null ? opts.temp : 0.9, maxOutputTokens: opts.max || 300 } })
+  });
+  const data = await resp.json();
+  if(!resp.ok){ throw new Error((data.error && data.error.message) || ('HTTP ' + resp.status)); }
+  const cand = (data.candidates || [])[0] || {};
+  const parts = (cand.content && cand.content.parts) || [];
+  const text = (parts[0] && parts[0].text || '').trim();
+  if(!text){ throw new Error('la IA no devolvio texto'); }
+  return text;
+}
+// Envuelve un botón con estado "Generando..." mientras corre la tarea de IA.
+async function runAiButton(btnId, task){
+  const btn = document.getElementById(btnId);
   const prev = btn.innerHTML; btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2"></i> Generando...';
-  const prompt = 'Eres el redactor de una tienda artesanal colombiana llamada "' + store + '" que hace piezas de decoracion en concreto hechas a mano. '
-    + 'Escribe UNA descripcion de producto atractiva y calida en espanol de Colombia, de 2 a 3 frases (maximo 55 palabras), sin titulos ni comillas, lista para publicar. '
-    + 'Resalta que es artesanal, hecha a mano y unica, y sugiere un uso o lugar donde queda bien. '
-    + 'No inventes medidas ni materiales que no aparezcan abajo. '
-    + 'Producto: ' + name + '.'
-    + (cat ? ' Categoria: ' + cat + '.' : '')
-    + (material ? ' Material: ' + material + '.' : '')
-    + (dims ? ' Medidas: ' + dims + '.' : '')
-    + (colors ? ' Colores: ' + colors + '.' : '');
-  try{
-    const resp = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + encodeURIComponent(key), {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }], generationConfig:{ temperature:0.9, maxOutputTokens:220 } })
-    });
-    const data = await resp.json();
-    if(!resp.ok){ throw new Error((data.error && data.error.message) || ('HTTP ' + resp.status)); }
-    const cand = (data.candidates || [])[0] || {};
-    const parts = (cand.content && cand.content.parts) || [];
-    const text = (parts[0] && parts[0].text || '').trim();
-    if(!text){ throw new Error('la IA no devolvio texto'); }
-    document.getElementById('edit-desc').value = text;
-    showToast('Descripción generada — revísala y ajústala a tu gusto');
-  }catch(e){
-    showToast('No se pudo generar: ' + (e.message || 'error de conexión'));
-  }finally{
-    btn.disabled = false; btn.innerHTML = prev;
-  }
+  try{ await task(); }
+  catch(e){ showToast('No se pudo generar: ' + (e.message || 'error de conexión')); }
+  finally{ btn.disabled = false; btn.innerHTML = prev; }
+}
+function storeName_(){ return (config && config.storeName) || 'Amazonia Concrete'; }
+const BRAND_CONTEXT = 'una tienda artesanal colombiana (Medellin) que hace piezas de decoracion en concreto hechas a mano, unicas, con estilo natural y minimalista';
+
+function generateDescriptionAI(){
+  return runAiButton('ai-desc-btn', async () => {
+    const val = id => (document.getElementById(id).value || '').trim();
+    const name = val('edit-name');
+    if(!name){ showToast('Escribe primero el nombre del producto'); return; }
+    const cat = val('edit-cat'), material = val('edit-material'), dims = val('edit-dimensions'), colors = val('edit-colors');
+    const prompt = 'Eres el redactor de "' + storeName_() + '", ' + BRAND_CONTEXT + '. '
+      + 'Escribe UNA descripcion de producto atractiva y calida en espanol de Colombia, de 2 a 3 frases (maximo 55 palabras), sin titulos ni comillas, lista para publicar. '
+      + 'Resalta que es artesanal, hecha a mano y unica, y sugiere un uso o lugar donde queda bien. '
+      + 'No inventes medidas ni materiales que no aparezcan abajo. '
+      + 'Producto: ' + name + '.'
+      + (cat ? ' Categoria: ' + cat + '.' : '')
+      + (material ? ' Material: ' + material + '.' : '')
+      + (dims ? ' Medidas: ' + dims + '.' : '')
+      + (colors ? ' Colores: ' + colors + '.' : '');
+    const text = await callGeminiAI(prompt, { max: 220 });
+    if(text){ document.getElementById('edit-desc').value = text; showToast('Descripción generada — revísala y ajústala a tu gusto'); }
+  });
+}
+
+function generateAboutAI(){
+  return runAiButton('ai-about-btn', async () => {
+    const prompt = 'Eres el redactor de "' + storeName_() + '", ' + BRAND_CONTEXT + '. '
+      + 'Escribe el texto de la pagina "Nosotros" en espanol de Colombia, calido y con proposito. '
+      + 'Devuelve EXACTAMENTE este formato, sin comillas ni etiquetas: '
+      + 'primera linea un titulo corto (maximo 6 palabras); luego una linea en blanco; luego el parrafo 1 (2-3 frases); luego una linea en blanco; luego el parrafo 2 (2-3 frases). '
+      + 'Habla de la pasion artesanal, lo hecho a mano, la conexion entre lo natural y lo urbano, y el respeto por el entorno. No inventes premios ni cifras.';
+    const text = await callGeminiAI(prompt, { max: 400, temp: 0.85 });
+    if(!text) return;
+    const blocks = text.split(/\n\s*\n/).map(s => s.trim()).filter(Boolean);
+    if(blocks.length >= 3){
+      document.getElementById('cnt-aboutTitle').value = blocks[0].replace(/^#+\s*/, '');
+      document.getElementById('cnt-aboutP1').value = blocks[1];
+      document.getElementById('cnt-aboutP2').value = blocks[2];
+    } else if(blocks.length === 2){
+      document.getElementById('cnt-aboutP1').value = blocks[0];
+      document.getElementById('cnt-aboutP2').value = blocks[1];
+    } else {
+      document.getElementById('cnt-aboutP1').value = text;
+    }
+    showToast('Texto de Nosotros generado — revísalo y ajústalo');
+  });
+}
+
+function populateIgProducts(){
+  const sel = document.getElementById('ig-product');
+  if(!sel) return;
+  const prods = getProducts().filter(p => p.active !== false);
+  sel.innerHTML = '<option value="">— Tema libre —</option>' + prods.map(p => `<option value="${escOrder(p.name)}">${escOrder(p.name)}</option>`).join('');
+}
+function generateInstagramAI(){
+  return runAiButton('ai-ig-btn', async () => {
+    const product = (document.getElementById('ig-product').value || '').trim();
+    const topic = (document.getElementById('ig-topic').value || '').trim();
+    if(!product && !topic){ showToast('Elige un producto o escribe un tema'); return; }
+    let subject = '';
+    if(product){
+      const p = getProducts().find(x => x.name === product);
+      subject = 'el producto "' + product + '"' + (p && p.desc ? ' (info: ' + p.desc + ')' : '');
+    } else {
+      subject = 'el tema "' + topic + '"';
+    }
+    if(product && topic) subject += ', enfocado en: ' + topic;
+    const prompt = 'Eres el community manager de "' + storeName_() + '", ' + BRAND_CONTEXT + '. '
+      + 'Escribe UNA publicacion para Instagram en espanol de Colombia sobre ' + subject + '. '
+      + 'Tono calido y cercano. Estructura: un gancho en la primera linea, 2 a 4 lineas cortas, de 2 a 4 emojis bien ubicados, y un llamado a la accion (escribir por WhatsApp o Instagram para comprar). '
+      + 'Al final agrega una linea con 10 a 12 hashtags relevantes en espanol (decoracion, concreto, hecho a mano, Medellin, Colombia, etc.). '
+      + 'No uses comillas alrededor del texto. No inventes precios ni datos que no te di.';
+    const text = await callGeminiAI(prompt, { max: 500, temp: 1.0 });
+    if(text){ document.getElementById('ig-output').value = text; showToast('Publicación generada — cópiala y pégala en Instagram'); }
+  });
+}
+function copyInstagramText(){
+  const ta = document.getElementById('ig-output');
+  const text = (ta.value || '').trim();
+  if(!text){ showToast('Primero genera la publicación'); return; }
+  navigator.clipboard.writeText(text).then(
+    () => showToast('Texto copiado — pégalo en Instagram'),
+    () => { ta.select(); document.execCommand('copy'); showToast('Texto copiado'); }
+  );
 }
 
 // CONFIG FORM
@@ -2130,6 +2230,7 @@ function loadContentForm(){
   const promoColor = config.promoBannerColor || '#3d4a35';
   document.querySelectorAll('input[name="promo-color"]').forEach(r => r.checked = r.value === promoColor);
   renderStatsEditor();
+  populateIgProducts();
   renderTestimonialsEditor();
   renderProcesoEditor();
   renderFAQEditor();
