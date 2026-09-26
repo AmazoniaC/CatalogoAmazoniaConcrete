@@ -2039,6 +2039,7 @@ function duplicateProduct(id){
 
 // ASISTENTE DE IA (Google Gemini, clave gratuita guardada solo en este navegador)
 const AI_KEY_STORE = 'ac_ai_key';
+const AI_MODEL = 'gemini-3.8-flash'; // modelo de Gemini recomendado por Google (cambialo aqui si sale otro)
 function loadAiKey(){ const el = document.getElementById('cfg-aiKey'); if(el) el.value = localStorage.getItem(AI_KEY_STORE) || ''; }
 function saveAiKey(){
   localStorage.setItem(AI_KEY_STORE, (document.getElementById('cfg-aiKey').value || '').trim());
@@ -2049,7 +2050,7 @@ async function callGeminiAI(prompt, opts){
   opts = opts || {};
   const key = (localStorage.getItem(AI_KEY_STORE) || '').trim();
   if(!key){ showToast('Primero pega tu clave gratuita en Configuración → Asistente de IA'); showAdminPage('config'); return null; }
-  const resp = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + encodeURIComponent(key), {
+  const resp = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + AI_MODEL + ':generateContent?key=' + encodeURIComponent(key), {
     method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }], generationConfig:{ temperature: opts.temp != null ? opts.temp : 0.9, maxOutputTokens: opts.max || 300 } })
   });
