@@ -505,6 +505,21 @@
       </div>
 
       <div class="admin-card">
+        <h3><i class="ti ti-chart-dots"></i> ANALÍTICA Y PÍXELES</h3>
+        <p style="font-size:13px;color:var(--text-mid);margin-bottom:1rem;">Mide tus visitas y ventas. Estos IDs son públicos (van en el catálogo) y ambos servicios son gratuitos. Registran automáticamente: ver producto, agregar al carrito y compra.</p>
+        <div class="field" style="max-width:640px;">
+          <label>GOOGLE ANALYTICS 4 — ID DE MEDICIÓN</label>
+          <input type="text" id="cfg-ga4Id" placeholder="G-XXXXXXXXXX" autocomplete="off" spellcheck="false">
+          <small>Lo consigues en <strong>analytics.google.com</strong> → Administrar → Flujos de datos. Empieza por <code>G-</code>.</small>
+        </div>
+        <div class="field" style="max-width:640px;">
+          <label>META PIXEL — ID (FACEBOOK / INSTAGRAM)</label>
+          <input type="text" id="cfg-metaPixelId" placeholder="Solo números, ej: 1234567890" autocomplete="off" spellcheck="false">
+          <small>Lo consigues en <strong>business.facebook.com</strong> → Administrador de eventos. Sirve para medir tus anuncios y hacer remarketing.</small>
+        </div>
+      </div>
+
+      <div class="admin-card">
         <h3><i class="ti ti-toggle-left"></i> OPCIONES</h3>
         <div class="toggle-field">
           <label class="toggle"><input type="checkbox" id="cfg-showPrices"><span class="toggle-slider"></span></label>
@@ -2184,6 +2199,8 @@ function loadConfigForm(){
   document.getElementById('cfg-instagram').value = config.instagram||'';
   document.getElementById('cfg-email').value = config.email||'';
   document.getElementById('cfg-location').value = config.location||'';
+  document.getElementById('cfg-ga4Id').value = config.ga4Id||'';
+  document.getElementById('cfg-metaPixelId').value = config.metaPixelId||'';
   document.getElementById('cfg-showPrices').checked = config.showPrices!==false;
   document.getElementById('cfg-enableCart').checked = config.enableCart!==false;
   document.getElementById('cfg-enableWhatsApp').checked = config.enableWhatsApp!==false;
@@ -2206,6 +2223,8 @@ function saveConfigForm(){
   config.instagram = document.getElementById('cfg-instagram').value;
   config.email = document.getElementById('cfg-email').value;
   config.location = document.getElementById('cfg-location').value;
+  config.ga4Id = (document.getElementById('cfg-ga4Id').value||'').trim();
+  config.metaPixelId = (document.getElementById('cfg-metaPixelId').value||'').trim().replace(/[^0-9]/g,'');
   config.showPrices = document.getElementById('cfg-showPrices').checked;
   config.enableCart = document.getElementById('cfg-enableCart').checked;
   config.enableWhatsApp = document.getElementById('cfg-enableWhatsApp').checked;

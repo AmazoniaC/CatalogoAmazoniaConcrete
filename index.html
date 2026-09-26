@@ -1408,6 +1408,35 @@ async function loadData() {
   }
   dataLoaded = true;
   applyConfig();
+  initAnalytics();
+}
+
+// ANALÍTICA: Google Analytics 4 + Meta Pixel (se activan solo si hay IDs en la config)
+let _analyticsReady = false;
+function initAnalytics(){
+  if(_analyticsReady) return;
+  const ga = (config.ga4Id || '').trim();
+  const px = (config.metaPixelId || '').trim().replace(/[^0-9]/g,'');
+  if(ga){
+    const s = document.createElement('script'); s.async = true;
+    s.src = 'https://www.googletagmanager.com/gtag/js?id=' + encodeURIComponent(ga);
+    document.head.appendChild(s);
+    window.dataLayer = window.dataLayer || [];
+    window.gtag = function(){ window.dataLayer.push(arguments); };
+    window.gtag('js', new Date());
+    window.gtag('config', ga);
+  }
+  if(px){
+    !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');
+    window.fbq('init', px);
+    window.fbq('track', 'PageView');
+  }
+  _analyticsReady = !!(ga || px);
+}
+// Envía un evento a GA4 y a Meta Pixel (a los que estén configurados)
+function trackEvent(gaName, gaParams, fbName, fbParams){
+  try{ if(window.gtag && gaName) window.gtag('event', gaName, gaParams || {}); }catch(e){}
+  try{ if(window.fbq && fbName) window.fbq('track', fbName, fbParams || {}); }catch(e){}
 }
 
 const ICON_SVG = {
@@ -1776,6 +1805,10 @@ function openProductModal(id) {
   trackRecentlyViewed(id);
   trackProductView(id);
   modalProduct = p;
+  trackEvent('view_item',
+    { currency: config.currency || 'COP', value: p.price, items: [{ item_id: String(p.id), item_name: p.name, price: p.price }] },
+    'ViewContent',
+    { content_ids: [String(p.id)], content_name: p.name, content_type: 'product', value: p.price, currency: config.currency || 'COP' });
   modalQty = 1;
   modalGalleryIndex = 0;
   document.getElementById('modal-cat').textContent = p.cat.toUpperCase();
@@ -1874,8 +1907,17 @@ function addToCartFromModal() {
   }
   const color = modalSelectedColor || '';
   for (let i = 0; i < qty; i++) addToCart(modalProduct.id, true, color);
+  trackAddToCart(modalProduct, qty);
   showToast(`${modalProduct.name}${color ? ' ('+color+')':''} x${qty} agregado al carrito`);
   closeModal();
+}
+// Evento add_to_cart / AddToCart (GA4 + Meta Pixel)
+function trackAddToCart(p, qty){
+  qty = qty || 1;
+  trackEvent('add_to_cart',
+    { currency: config.currency || 'COP', value: p.price * qty, items: [{ item_id: String(p.id), item_name: p.name, price: p.price, quantity: qty }] },
+    'AddToCart',
+    { content_ids: [String(p.id)], content_name: p.name, content_type: 'product', value: p.price * qty, currency: config.currency || 'COP' });
 }
 
 // CART
@@ -1898,6 +1940,7 @@ function addToCart(id, silent = false, color = '') {
     flyToCart(id);
     bumpCartBadge();
     showToast(`${p.name} agregado al carrito`);
+    trackAddToCart(p, 1);
     const btn = document.querySelector(`[data-add-id="${id}"]`);
     if (btn) {
       btn.classList.add('added');
@@ -2163,6 +2206,14 @@ function submitOrder() {
   if (pmList.length && typeof pmList[0] === 'string') { const pmMap = { nequi: 'Nequi', daviplata: 'Daviplata', transfer: 'Transferencia', cash: 'Contraentrega' }; pmList = pmList.map(k => ({ name: pmMap[k] || k, enabled: true })); }
   const payments = pmList.filter(m => m.enabled !== false).map(m => m.name).join(', ');
 
+  const evCur = config.currency || 'COP';
+  const evItems = cart.map(x => ({ item_id: String(x.id), item_name: x.name, price: x.price, quantity: x.qty }));
+  const evCount = cart.reduce((a, x) => a + x.qty, 0);
+  trackEvent('begin_checkout',
+    { currency: evCur, value: total, items: evItems },
+    'InitiateCheckout',
+    { content_ids: evItems.map(i => i.item_id), content_type: 'product', value: total, currency: evCur, num_items: evCount });
+
   const params = {
     action: 'create', name: name, phone: phone, email: email, address: address, city: city,
     items: itemsText, itemsJson: itemsJson, subtotal: String(subtotal), discount: String(discount),
@@ -2181,6 +2232,10 @@ function submitOrder() {
   window[cb] = function (res) {
     clearTimeout(timer); cleanup(); btn.disabled = false; btn.innerHTML = prev;
     if (res && res.ok) {
+      trackEvent('purchase',
+        { transaction_id: res.orderNum || '', currency: evCur, value: total, shipping: shipping, items: evItems },
+        'Purchase',
+        { content_ids: evItems.map(i => i.item_id), content_type: 'product', value: total, currency: evCur, num_items: evCount });
       showOrderSuccess(res.orderNum || '');
       cart = []; saveCart(); appliedCoupon = null; updateCartUI();
       ['co-name','co-phone','co-email','co-address','gift-msg-text'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
