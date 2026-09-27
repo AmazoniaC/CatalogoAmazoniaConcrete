@@ -1574,8 +1574,25 @@ function subscribe_(d) {
   for (let i = 0; i < col.length; i++) {
     if (String(col[i][0]).trim().toLowerCase() === email) return { ok: true, already: true };
   }
-  sh.appendRow([ new Date(), email, d.name || '', d.source || 'catalogo' ]);
+  const name = String(d.name || '').trim();
+  sh.appendRow([ new Date(), email, name, d.source || 'catalogo' ]);
+  const total = sh.getLastRow() - 1; // sin contar el encabezado
+  try { notifySubscriber_(email, name, total); } catch (e) {}
   return { ok: true };
+}
+// Avisa al dueno (correo + WhatsApp) cuando llega un nuevo suscriptor.
+function notifySubscriber_(email, name, total) {
+  const owner = ownerEmail_();
+  if (owner) {
+    var inner = '<p style="margin:0;font-size:15px;color:#2a2620;">¡Felicidades! 🎉 Un nuevo <strong>amazónic@</strong> se acaba de unir a tu comunidad.</p>'
+      + '<table style="width:100%;border-collapse:collapse;font-size:14px;background:#faf8f5;border-radius:6px;overflow:hidden;margin-top:16px;">'
+      + (name ? '<tr><td style="padding:8px 12px;color:#6b6560;width:90px;">Nombre</td><td style="padding:8px 12px;font-weight:600;">' + esc_(name) + '</td></tr>' : '')
+      + '<tr><td style="padding:8px 12px;color:#6b6560;">Correo</td><td style="padding:8px 12px;font-weight:600;">' + esc_(email) + '</td></tr>'
+      + '</table>'
+      + '<p style="margin:16px 0 0;font-size:13px;color:#6b6560;">Ya son <strong>' + total + '</strong> personas en tu comunidad. 🌿</p>';
+    try { MailApp.sendEmail(owner, STORE_NAME + ' - ¡Nuevo suscriptor! 🌿', 'Nuevo suscriptor: ' + (name ? name + ' - ' : '') + email + ' (total: ' + total + ')', { htmlBody: emailShell_('NUEVO SUSCRIPTOR', inner), name: STORE_NAME }); } catch (e) {}
+  }
+  notifyWhatsApp_('*¡Nuevo suscriptor!* 🌿\\nSe unio un nuevo amazonic@ a tu comunidad:\\n' + (name ? name + '\\n' : '') + email + '\\nYa son ' + total + ' en total. Felicidades!');
 }
 
 function createOrder_(d) {

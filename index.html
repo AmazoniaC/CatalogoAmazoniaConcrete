@@ -993,6 +993,7 @@
       <h3 style="font-family:'Cormorant Garamond',serif;font-size:30px;font-weight:300;color:var(--text-dark);margin-bottom:.5rem;">Únete a nuestra comunidad</h3>
       <p style="font-size:14px;color:var(--text-mid);margin-bottom:1.5rem;line-height:1.6;">Recibe primero los nuevos lanzamientos y promociones exclusivas. Sin spam, solo lo bueno. 🌿</p>
       <form onsubmit="subscribeNewsletter(event)" style="display:flex;gap:.5rem;flex-wrap:wrap;justify-content:center;">
+        <input type="text" id="newsletter-name" placeholder="Tu nombre (opcional)" autocomplete="name" style="flex:1 1 100%;padding:.85rem 1rem;border:1px solid var(--concrete);border-radius:6px;font-family:'Jost',sans-serif;font-size:14px;background:var(--white);color:var(--text-dark);">
         <input type="email" id="newsletter-email" placeholder="Tu correo electrónico" autocomplete="email" required style="flex:1;min-width:220px;padding:.85rem 1rem;border:1px solid var(--concrete);border-radius:6px;font-family:'Jost',sans-serif;font-size:14px;background:var(--white);color:var(--text-dark);">
         <button type="submit" id="newsletter-btn" class="btn-primary" style="padding:.85rem 1.6rem;border:none;border-radius:6px;background:var(--green-dark);color:#fff;font-family:'Jost',sans-serif;font-size:12px;letter-spacing:2px;cursor:pointer;">SUSCRIBIRME</button>
       </form>
@@ -1465,9 +1466,11 @@ function initNewsletter(){
 function subscribeNewsletter(e){
   if(e) e.preventDefault();
   const input = document.getElementById('newsletter-email');
+  const nameInput = document.getElementById('newsletter-name');
   const msg = document.getElementById('newsletter-msg');
   const btn = document.getElementById('newsletter-btn');
   const email = (input.value || '').trim();
+  const name = (nameInput && nameInput.value || '').trim();
   const show = (t, ok) => { msg.textContent = t; msg.style.color = ok ? '#4a9e5a' : '#c0392b'; msg.style.display = 'block'; };
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ show('Ingresa un correo válido.', false); return; }
   const webhook = (config.orderWebhookUrl || '').trim();
@@ -1483,12 +1486,13 @@ function subscribeNewsletter(e){
     if(res && res.ok){
       try{ localStorage.setItem('ac_subscribed', '1'); }catch(e){}
       input.value = '';
+      if(nameInput) nameInput.value = '';
       show(res.already ? '¡Ya estabas suscrito! Gracias 🌿' : '¡Listo! Gracias por suscribirte 🌿', true);
       trackEvent('generate_lead', {}, 'Lead', {});
       setTimeout(() => { const b = document.getElementById('newsletter-band'); if(b) b.style.display = 'none'; }, 2800);
     } else { fail(); }
   };
-  const qs = 'action=subscribe&email=' + encodeURIComponent(email) + '&source=catalogo&callback=' + cb + '&_=' + Date.now();
+  const qs = 'action=subscribe&email=' + encodeURIComponent(email) + '&name=' + encodeURIComponent(name) + '&source=catalogo&callback=' + cb + '&_=' + Date.now();
   script = document.createElement('script');
   script.src = webhook + (webhook.indexOf('?') >= 0 ? '&' : '?') + qs;
   script.onerror = fail;
