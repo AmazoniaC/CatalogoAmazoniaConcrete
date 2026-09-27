@@ -1492,6 +1492,16 @@ function subscribeNewsletter(e){
   script = document.createElement('script');
   script.src = webhook + (webhook.indexOf('?') >= 0 ? '&' : '?') + qs;
   script.onerror = fail;
+  // Si el script carga pero no llama al callback, el Web App respondio texto plano
+  // (p.ej. "unauthorized" = script desactualizado). Avisamos rapido y claro.
+  script.onload = function(){
+    setTimeout(function(){
+      if(window[cb]){
+        clearTimeout(timer); cleanup(); btn.disabled = false; btn.innerHTML = prev;
+        show('El servidor aún no tiene la función de suscripción. Actualiza y vuelve a publicar el script (Nueva versión).', false);
+      }
+    }, 400);
+  };
   document.body.appendChild(script);
 }
 
