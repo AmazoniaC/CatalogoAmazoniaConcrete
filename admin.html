@@ -1558,6 +1558,26 @@ function sendStatusEmail_(r, status) {
   try { MailApp.sendEmail(d.email, STORE_NAME + ' - ' + info.t + ' (' + d.orderNum + ')',
     info.t + ' - ' + d.orderNum + '. ' + info.m, { htmlBody: statusEmailHtml_(d, info), name: STORE_NAME }); } catch (e) {}
 }
+// ----- SUSCRIPTORES (captura de correos) -----
+const SUBS_SHEET = 'Suscriptores';
+function subsSheet_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sh = ss.getSheetByName(SUBS_SHEET) || ss.insertSheet(SUBS_SHEET);
+  if (sh.getLastRow() === 0) sh.appendRow(['Fecha','Correo','Nombre','Origen']);
+  return sh;
+}
+function subscribe_(d) {
+  const email = String(d.email || '').trim().toLowerCase();
+  if (!/^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/.test(email)) return { ok: false, error: 'correo invalido' };
+  const sh = subsSheet_();
+  const col = sh.getLastRow() > 1 ? sh.getRange(2, 2, sh.getLastRow() - 1, 1).getValues() : [];
+  for (let i = 0; i < col.length; i++) {
+    if (String(col[i][0]).trim().toLowerCase() === email) return { ok: true, already: true };
+  }
+  sh.appendRow([ new Date(), email, d.name || '', d.source || 'catalogo' ]);
+  return { ok: true };
+}
+
 function createOrder_(d) {
   const sh = sheet_();
   const orderNum = 'AC-' + ('000' + sh.getLastRow()).slice(-4); // encabezado cuenta como fila 1 => 1er pedido AC-0001
@@ -1585,6 +1605,12 @@ function doGet(e) {
   if (p.action === 'create') {
     const num = createOrder_(p);
     const out = JSON.stringify({ ok: true, orderNum: num });
+    if (p.callback) return ContentService.createTextOutput(p.callback + '(' + out + ')').setMimeType(ContentService.MimeType.JAVASCRIPT);
+    return ContentService.createTextOutput(out).setMimeType(ContentService.MimeType.JSON);
+  }
+  if (p.action === 'subscribe') {
+    const r = subscribe_(p);
+    const out = JSON.stringify(r);
     if (p.callback) return ContentService.createTextOutput(p.callback + '(' + out + ')').setMimeType(ContentService.MimeType.JAVASCRIPT);
     return ContentService.createTextOutput(out).setMimeType(ContentService.MimeType.JSON);
   }

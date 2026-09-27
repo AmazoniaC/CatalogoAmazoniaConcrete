@@ -987,6 +987,19 @@
     </div>
   </div>
 
+  <div class="newsletter-band" id="newsletter-band" style="display:none;padding:4rem 1.5rem;background:var(--concrete-light);">
+    <div class="reveal" style="max-width:540px;margin:0 auto;text-align:center;">
+      <span class="eyebrow" style="font-size:10px;letter-spacing:5px;color:var(--concrete-dark);display:block;margin-bottom:.6rem;">NOVEDADES Y OFERTAS</span>
+      <h3 style="font-family:'Cormorant Garamond',serif;font-size:30px;font-weight:300;color:var(--text-dark);margin-bottom:.5rem;">Únete a nuestra comunidad</h3>
+      <p style="font-size:14px;color:var(--text-mid);margin-bottom:1.5rem;line-height:1.6;">Recibe primero los nuevos lanzamientos y promociones exclusivas. Sin spam, solo lo bueno. 🌿</p>
+      <form onsubmit="subscribeNewsletter(event)" style="display:flex;gap:.5rem;flex-wrap:wrap;justify-content:center;">
+        <input type="email" id="newsletter-email" placeholder="Tu correo electrónico" autocomplete="email" required style="flex:1;min-width:220px;padding:.85rem 1rem;border:1px solid var(--concrete);border-radius:6px;font-family:'Jost',sans-serif;font-size:14px;background:var(--white);color:var(--text-dark);">
+        <button type="submit" id="newsletter-btn" class="btn-primary" style="padding:.85rem 1.6rem;border:none;border-radius:6px;background:var(--green-dark);color:#fff;font-family:'Jost',sans-serif;font-size:12px;letter-spacing:2px;cursor:pointer;">SUSCRIBIRME</button>
+      </form>
+      <p id="newsletter-msg" style="display:none;margin-top:1rem;font-size:13px;font-weight:600;"></p>
+    </div>
+  </div>
+
   <footer>
     <div class="footer-inner">
       <div class="footer-logo"><span class="f-name">AMAZONIA</span><span class="f-sub">CONCRETE</span></div>
@@ -1409,6 +1422,7 @@ async function loadData() {
   dataLoaded = true;
   applyConfig();
   initAnalytics();
+  initNewsletter();
 }
 
 // ANALÍTICA: Google Analytics 4 + Meta Pixel (se activan solo si hay IDs en la config)
@@ -1437,6 +1451,48 @@ function initAnalytics(){
 function trackEvent(gaName, gaParams, fbName, fbParams){
   try{ if(window.gtag && gaName) window.gtag('event', gaName, gaParams || {}); }catch(e){}
   try{ if(window.fbq && fbName) window.fbq('track', fbName, fbParams || {}); }catch(e){}
+}
+
+// NEWSLETTER: captura de correos (guarda en la Hoja de Google via el mismo puente)
+function initNewsletter(){
+  const band = document.getElementById('newsletter-band');
+  if(!band) return;
+  let subscribed = false;
+  try{ subscribed = localStorage.getItem('ac_subscribed') === '1'; }catch(e){}
+  const webhook = (config.orderWebhookUrl || '').trim();
+  band.style.display = (webhook && !subscribed) ? '' : 'none';
+}
+function subscribeNewsletter(e){
+  if(e) e.preventDefault();
+  const input = document.getElementById('newsletter-email');
+  const msg = document.getElementById('newsletter-msg');
+  const btn = document.getElementById('newsletter-btn');
+  const email = (input.value || '').trim();
+  const show = (t, ok) => { msg.textContent = t; msg.style.color = ok ? '#4a9e5a' : '#c0392b'; msg.style.display = 'block'; };
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ show('Ingresa un correo válido.', false); return; }
+  const webhook = (config.orderWebhookUrl || '').trim();
+  if(!webhook){ show('No disponible por ahora.', false); return; }
+  const prev = btn.innerHTML; btn.disabled = true; btn.innerHTML = 'Enviando...';
+  const cb = '__subCb_' + Date.now();
+  let script = null;
+  const cleanup = () => { try{ delete window[cb]; }catch(e){ window[cb] = undefined; } if(script && script.parentNode) script.parentNode.removeChild(script); };
+  const fail = () => { cleanup(); btn.disabled = false; btn.innerHTML = prev; show('No se pudo suscribir. Intenta de nuevo.', false); };
+  const timer = setTimeout(fail, 12000);
+  window[cb] = function(res){
+    clearTimeout(timer); cleanup(); btn.disabled = false; btn.innerHTML = prev;
+    if(res && res.ok){
+      try{ localStorage.setItem('ac_subscribed', '1'); }catch(e){}
+      input.value = '';
+      show(res.already ? '¡Ya estabas suscrito! Gracias 🌿' : '¡Listo! Gracias por suscribirte 🌿', true);
+      trackEvent('generate_lead', {}, 'Lead', {});
+      setTimeout(() => { const b = document.getElementById('newsletter-band'); if(b) b.style.display = 'none'; }, 2800);
+    } else { fail(); }
+  };
+  const qs = 'action=subscribe&email=' + encodeURIComponent(email) + '&source=catalogo&callback=' + cb + '&_=' + Date.now();
+  script = document.createElement('script');
+  script.src = webhook + (webhook.indexOf('?') >= 0 ? '&' : '?') + qs;
+  script.onerror = fail;
+  document.body.appendChild(script);
 }
 
 const ICON_SVG = {
