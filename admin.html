@@ -772,6 +772,19 @@
           <input type="password" id="cfg-orderSecret" placeholder="Tu clave secreta" autocomplete="off">
           <small>Se guarda solo en este navegador (no se publica). Debe coincidir con <code>SECRET</code> en el script.</small>
         </div>
+        <div class="field-row">
+          <div class="field">
+            <label>WHATSAPP — TU NÚMERO (opcional)</label>
+            <input type="text" id="cfg-waPhone" placeholder="573001234567" autocomplete="off" spellcheck="false">
+            <small>Con indicativo, sin + ni espacios. Para los avisos por WhatsApp.</small>
+          </div>
+          <div class="field">
+            <label>WHATSAPP — CLAVE CALLMEBOT (opcional)</label>
+            <input type="password" id="cfg-waKey" placeholder="Tu apikey de CallMeBot" autocomplete="off">
+            <small>Se guarda solo en este navegador.</small>
+          </div>
+        </div>
+        <p style="font-size:12px;color:var(--text-mid);margin:.25rem 0 0;background:var(--concrete-light);padding:.6rem .8rem;border-radius:6px;"><i class="ti ti-wand" style="color:var(--green-dark);"></i> Al pulsar <strong>COPIAR SCRIPT</strong>, estos datos (correo, clave y WhatsApp) se insertan solos en el script — ya no tienes que escribirlos cada vez.</p>
         <div class="btn-group">
           <button class="btn btn-save" onclick="saveOrdersConfig()"><i class="ti ti-device-floppy"></i> GUARDAR CONEXIÓN</button>
           <button class="btn btn-ghost" onclick="fetchOrders()"><i class="ti ti-refresh"></i> ACTUALIZAR</button>
@@ -1272,28 +1285,55 @@ const ORDERS_SECRET_KEY = 'ac_orders_secret';
 let _ordersData = [];
 const ORDER_STATUSES = ['Pendiente','Pagado','Enviado','Entregado','Cancelado'];
 const ORDER_STATUS_COLOR = { Pendiente:'#b87355', Pagado:'#4a9e5a', Enviado:'#3a6ea5', Entregado:'#3d4a35', Cancelado:'#d94f4f' };
+const WA_PHONE_KEY = 'ac_wa_phone';
+const WA_KEY_KEY = 'ac_wa_key';
+
+// Inserta los datos privados del dueño (guardados en este navegador) en el script,
+// solo al momento de copiar. El archivo publico nunca los contiene.
+function personalizedScript(){
+  let code = APPS_SCRIPT_CODE;
+  const secret = (localStorage.getItem(ORDERS_SECRET_KEY) || '').trim();
+  const email = ((typeof config === 'object' && config.email) || '').trim();
+  const waPhone = (localStorage.getItem(WA_PHONE_KEY) || '').trim().replace(/[^0-9]/g,'');
+  const waKey = (localStorage.getItem(WA_KEY_KEY) || '').trim();
+  const q = v => String(v).replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+  const setConst = (name, value) => {
+    if(!value) return;
+    code = code.replace(new RegExp("const " + name + " = '[^']*';"), "const " + name + " = '" + q(value) + "';");
+  };
+  setConst('SECRET', secret);
+  setConst('ALERT_EMAIL', email);
+  setConst('WHATSAPP_PHONE', waPhone);
+  setConst('WHATSAPP_APIKEY', waKey);
+  return code;
+}
 
 function loadOrdersConfig(){
   const u = document.getElementById('cfg-orderWebhookUrl'); if(u) u.value = config.orderWebhookUrl || '';
   const s = document.getElementById('cfg-orderSecret'); if(s) s.value = localStorage.getItem(ORDERS_SECRET_KEY) || '';
-  const pre = document.getElementById('orders-script-code'); if(pre && !pre.textContent) pre.textContent = APPS_SCRIPT_CODE;
+  const wp = document.getElementById('cfg-waPhone'); if(wp) wp.value = localStorage.getItem(WA_PHONE_KEY) || '';
+  const wk = document.getElementById('cfg-waKey'); if(wk) wk.value = localStorage.getItem(WA_KEY_KEY) || '';
+  const pre = document.getElementById('orders-script-code'); if(pre) pre.textContent = personalizedScript();
 }
 function saveOrdersConfig(){
   config.orderWebhookUrl = (document.getElementById('cfg-orderWebhookUrl').value || '').trim();
   localStorage.setItem(ORDERS_SECRET_KEY, (document.getElementById('cfg-orderSecret').value || '').trim());
+  localStorage.setItem(WA_PHONE_KEY, (document.getElementById('cfg-waPhone').value || '').trim().replace(/[^0-9]/g,''));
+  localStorage.setItem(WA_KEY_KEY, (document.getElementById('cfg-waKey').value || '').trim());
   saveConfig(config);
   markPendingChanges();
+  const pre = document.getElementById('orders-script-code'); if(pre) pre.textContent = personalizedScript();
   showToast('Conexión guardada — recuerda publicar para que el catálogo la use');
   fetchOrders();
 }
 function toggleOrdersGuide(){
   const g = document.getElementById('orders-guide');
   const pre = document.getElementById('orders-script-code');
-  if(pre && !pre.textContent) pre.textContent = APPS_SCRIPT_CODE;
+  if(pre) pre.textContent = personalizedScript();
   if(g) g.style.display = g.style.display === 'none' ? 'block' : 'none';
 }
 function copyOrdersScript(){
-  navigator.clipboard.writeText(APPS_SCRIPT_CODE).then(()=>showToast('Script copiado — pégalo en Apps Script'));
+  navigator.clipboard.writeText(personalizedScript()).then(()=>showToast('Script copiado con tus datos — pégalo en Apps Script'));
 }
 function fetchOrders(){
   const url = (config.orderWebhookUrl || '').trim();
