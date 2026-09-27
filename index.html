@@ -1308,11 +1308,17 @@
     </div>
     <div class="welcome-body">
       <p id="welcome-text">Descubre nuestras piezas artesanales hechas a mano en Colombia.</p>
+      <form id="welcome-form" style="display:none;margin-bottom:1rem;" onsubmit="claimWelcomeCoupon(event)">
+        <input type="text" id="welcome-name" placeholder="Tu nombre (opcional)" autocomplete="name" style="width:100%;padding:.8rem 1rem;margin-bottom:.5rem;border:1px solid var(--concrete);border-radius:6px;font-family:'Jost',sans-serif;font-size:14px;background:var(--white);color:var(--text-dark);">
+        <input type="email" id="welcome-email" placeholder="Tu correo electrónico" autocomplete="email" required style="width:100%;padding:.8rem 1rem;margin-bottom:.75rem;border:1px solid var(--concrete);border-radius:6px;font-family:'Jost',sans-serif;font-size:14px;background:var(--white);color:var(--text-dark);">
+        <button type="submit" id="welcome-form-btn" class="btn-primary" style="width:100%;text-align:center;">QUIERO MI CUPÓN</button>
+        <p id="welcome-form-msg" style="display:none;margin-top:.6rem;font-size:12px;font-weight:600;text-align:center;"></p>
+      </form>
       <div class="welcome-coupon" id="welcome-coupon" style="display:none;">
         <span class="wc-code" id="welcome-coupon-code"></span>
         <span class="wc-desc" id="welcome-coupon-desc"></span>
       </div>
-      <button class="btn-primary" style="width:100%;text-align:center;" onclick="closeWelcomePopup();showSection('catalogo');">
+      <button class="btn-primary" id="welcome-cta-btn" style="width:100%;text-align:center;" onclick="closeWelcomePopup();showSection('catalogo');">
         VER CATÁLOGO
       </button>
     </div>
@@ -1424,6 +1430,7 @@ async function loadData() {
   applyConfig();
   initAnalytics();
   initNewsletter();
+  restoreWelcomeCoupon();
 }
 
 // ANALÍTICA: Google Analytics 4 + Meta Pixel (se activan solo si hay IDs en la config)
@@ -1463,6 +1470,29 @@ function initNewsletter(){
   const webhook = (config.orderWebhookUrl || '').trim();
   band.style.display = (webhook && !subscribed) ? '' : 'none';
 }
+// Envía una suscripción al puente (JSONP). onDone recibe {ok, already} o {ok:false, error}.
+function postSubscribe(email, name, source, onDone){
+  const webhook = (config.orderWebhookUrl || '').trim();
+  if(!webhook){ onDone({ ok:false, error:'no-webhook' }); return; }
+  const cb = '__subCb_' + Date.now() + Math.floor(Math.random()*1000);
+  let script = null, done = false;
+  const cleanup = () => { try{ delete window[cb]; }catch(e){ window[cb] = undefined; } if(script && script.parentNode) script.parentNode.removeChild(script); };
+  const finish = (res) => { if(done) return; done = true; clearTimeout(timer); cleanup(); onDone(res); };
+  const timer = setTimeout(() => finish({ ok:false, error:'timeout' }), 12000);
+  window[cb] = function(res){ finish(res && res.ok ? res : { ok:false, error:(res && res.error) || 'error' }); };
+  const qs = 'action=subscribe&email=' + encodeURIComponent(email) + '&name=' + encodeURIComponent(name||'') + '&source=' + encodeURIComponent(source||'catalogo') + '&callback=' + cb + '&_=' + Date.now();
+  script = document.createElement('script');
+  script.src = webhook + (webhook.indexOf('?') >= 0 ? '&' : '?') + qs;
+  script.onerror = () => finish({ ok:false, error:'network' });
+  // Si carga pero no llama al callback: el Web App respondio texto plano (script viejo).
+  script.onload = function(){ setTimeout(() => { if(window[cb]) finish({ ok:false, error:'stale-script' }); }, 400); };
+  document.body.appendChild(script);
+}
+function subscribeErrorMsg(err){
+  if(err === 'stale-script') return 'El servidor aún no tiene la función de suscripción. Actualiza y vuelve a publicar el script (Nueva versión).';
+  if(err === 'correo invalido') return 'Ingresa un correo válido.';
+  return 'No se pudo suscribir. Intenta de nuevo.';
+}
 function subscribeNewsletter(e){
   if(e) e.preventDefault();
   const input = document.getElementById('newsletter-email');
@@ -1473,40 +1503,19 @@ function subscribeNewsletter(e){
   const name = (nameInput && nameInput.value || '').trim();
   const show = (t, ok) => { msg.textContent = t; msg.style.color = ok ? '#4a9e5a' : '#c0392b'; msg.style.display = 'block'; };
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ show('Ingresa un correo válido.', false); return; }
-  const webhook = (config.orderWebhookUrl || '').trim();
-  if(!webhook){ show('No disponible por ahora.', false); return; }
   const prev = btn.innerHTML; btn.disabled = true; btn.innerHTML = 'Enviando...';
-  const cb = '__subCb_' + Date.now();
-  let script = null;
-  const cleanup = () => { try{ delete window[cb]; }catch(e){ window[cb] = undefined; } if(script && script.parentNode) script.parentNode.removeChild(script); };
-  const fail = () => { cleanup(); btn.disabled = false; btn.innerHTML = prev; show('No se pudo suscribir. Intenta de nuevo.', false); };
-  const timer = setTimeout(fail, 12000);
-  window[cb] = function(res){
-    clearTimeout(timer); cleanup(); btn.disabled = false; btn.innerHTML = prev;
+  postSubscribe(email, name, 'catalogo', function(res){
+    btn.disabled = false; btn.innerHTML = prev;
     if(res && res.ok){
       try{ localStorage.setItem('ac_subscribed', '1'); }catch(e){}
-      input.value = '';
-      if(nameInput) nameInput.value = '';
+      input.value = ''; if(nameInput) nameInput.value = '';
       show(res.already ? '¡Ya estabas suscrito! Gracias 🌿' : '¡Listo! Gracias por suscribirte 🌿', true);
       trackEvent('generate_lead', {}, 'Lead', {});
       setTimeout(() => { const b = document.getElementById('newsletter-band'); if(b) b.style.display = 'none'; }, 2800);
-    } else { fail(); }
-  };
-  const qs = 'action=subscribe&email=' + encodeURIComponent(email) + '&name=' + encodeURIComponent(name) + '&source=catalogo&callback=' + cb + '&_=' + Date.now();
-  script = document.createElement('script');
-  script.src = webhook + (webhook.indexOf('?') >= 0 ? '&' : '?') + qs;
-  script.onerror = fail;
-  // Si el script carga pero no llama al callback, el Web App respondio texto plano
-  // (p.ej. "unauthorized" = script desactualizado). Avisamos rapido y claro.
-  script.onload = function(){
-    setTimeout(function(){
-      if(window[cb]){
-        clearTimeout(timer); cleanup(); btn.disabled = false; btn.innerHTML = prev;
-        show('El servidor aún no tiene la función de suscripción. Actualiza y vuelve a publicar el script (Nueva versión).', false);
-      }
-    }, 400);
-  };
-  document.body.appendChild(script);
+    } else {
+      show(subscribeErrorMsg(res && res.error), false);
+    }
+  });
 }
 
 const ICON_SVG = {
@@ -3401,31 +3410,96 @@ function updateLightboxView() {
 }
 
 // WELCOME POPUP
+let _welcomeCoupon = null;
 function showWelcomePopup() {
   if (localStorage.getItem('ac_welcome_seen')) return;
   if (config.welcomePopupEnabled === false) return;
   const titleEl = document.getElementById('welcome-title');
   const subtitleEl = document.getElementById('welcome-subtitle');
   const textEl = document.getElementById('welcome-text');
+  const form = document.getElementById('welcome-form');
+  const couponEl = document.getElementById('welcome-coupon');
+  const ctaBtn = document.getElementById('welcome-cta-btn');
   if (titleEl) titleEl.textContent = 'Bienvenido a ' + (config.storeName || 'Amazonia Concrete');
   if (subtitleEl) subtitleEl.textContent = config.heroEyebrow || 'PIEZAS ARTESANALES EN CONCRETO';
   const activeCoupon = (config.coupons || []).find(c => c.active !== false && c.code && c.value > 0);
-  if (activeCoupon) {
-    const couponEl = document.getElementById('welcome-coupon');
-    const codeEl = document.getElementById('welcome-coupon-code');
-    const descEl = document.getElementById('welcome-coupon-desc');
-    if (couponEl) couponEl.style.display = '';
-    if (codeEl) codeEl.textContent = activeCoupon.code;
-    if (descEl) {
-      descEl.textContent = activeCoupon.type === 'percent'
-        ? activeCoupon.value + '% de descuento en tu compra'
-        : '$' + new Intl.NumberFormat('es-CO').format(activeCoupon.value) + ' de descuento en tu compra';
-    }
-    if (textEl) textEl.textContent = 'Usa este código en tu compra y obtén un descuento especial.';
+  _welcomeCoupon = activeCoupon || null;
+  let claimed = false;
+  try { claimed = localStorage.getItem('ac_welcome_claimed') === '1'; } catch(e) {}
+
+  if (activeCoupon && !claimed) {
+    // Ofrecer el cupón a cambio del correo
+    const offer = activeCoupon.type === 'percent'
+      ? activeCoupon.value + '% de descuento'
+      : '$' + new Intl.NumberFormat('es-CO').format(activeCoupon.value) + ' de descuento';
+    if (textEl) textEl.innerHTML = 'Suscríbete y recibe <strong>' + offer + '</strong> en tu primera compra. 🌿';
+    if (form) form.style.display = '';
+    if (couponEl) couponEl.style.display = 'none';
+    if (ctaBtn) { ctaBtn.textContent = 'Ahora no, solo ver el catálogo'; ctaBtn.style.cssText += ';background:transparent;color:var(--text-mid);border:1px solid var(--concrete);'; }
+  } else if (activeCoupon && claimed) {
+    // Ya lo reclamó: mostrar el código directo
+    if (textEl) textEl.textContent = 'Este es tu cupón. Úsalo en el carrito para tu descuento.';
+    if (form) form.style.display = 'none';
+    revealWelcomeCoupon(activeCoupon);
+  } else {
+    if (form) form.style.display = 'none';
+    if (couponEl) couponEl.style.display = 'none';
   }
   setTimeout(function() {
     document.getElementById('welcome-popup').classList.add('open');
   }, 2500);
+}
+function revealWelcomeCoupon(coupon){
+  const couponEl = document.getElementById('welcome-coupon');
+  const codeEl = document.getElementById('welcome-coupon-code');
+  const descEl = document.getElementById('welcome-coupon-desc');
+  if (couponEl) couponEl.style.display = '';
+  if (codeEl) codeEl.textContent = coupon.code;
+  if (descEl) descEl.textContent = coupon.type === 'percent'
+    ? coupon.value + '% de descuento en tu compra'
+    : '$' + new Intl.NumberFormat('es-CO').format(coupon.value) + ' de descuento en tu compra';
+}
+function claimWelcomeCoupon(e){
+  if(e) e.preventDefault();
+  const emailEl = document.getElementById('welcome-email');
+  const nameEl = document.getElementById('welcome-name');
+  const msg = document.getElementById('welcome-form-msg');
+  const btn = document.getElementById('welcome-form-btn');
+  const email = (emailEl.value || '').trim();
+  const name = (nameEl && nameEl.value || '').trim();
+  const show = (t, ok) => { msg.textContent = t; msg.style.color = ok ? '#4a9e5a' : '#c0392b'; msg.style.display = 'block'; };
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ show('Ingresa un correo válido.', false); return; }
+  const prev = btn.innerHTML; btn.disabled = true; btn.innerHTML = 'Enviando...';
+  postSubscribe(email, name, 'popup-cupon', function(res){
+    btn.disabled = false; btn.innerHTML = prev;
+    if(res && res.ok){
+      try{ localStorage.setItem('ac_welcome_claimed', '1'); localStorage.setItem('ac_subscribed', '1'); }catch(e){}
+      trackEvent('generate_lead', {}, 'Lead', {});
+      const form = document.getElementById('welcome-form'); if(form) form.style.display = 'none';
+      const textEl = document.getElementById('welcome-text'); if(textEl) textEl.innerHTML = '¡Listo! 🎉 Este es tu cupón, ya quedó aplicado a tu carrito:';
+      if(_welcomeCoupon){ revealWelcomeCoupon(_welcomeCoupon); applyWelcomeCoupon(_welcomeCoupon); }
+      const cta = document.getElementById('welcome-cta-btn');
+      if(cta){ cta.textContent = 'VER CATÁLOGO'; cta.style.cssText = 'width:100%;text-align:center;'; }
+    } else {
+      show(subscribeErrorMsg(res && res.error), false);
+    }
+  });
+}
+// Aplica el cupón de bienvenida al carrito y lo recuerda para próximas visitas.
+function applyWelcomeCoupon(coupon){
+  if(!coupon) return;
+  appliedCoupon = coupon;
+  try{ localStorage.setItem('ac_welcome_code', coupon.code); }catch(e){}
+  if(typeof renderAppliedCoupon === 'function') renderAppliedCoupon();
+  if(typeof updateCartUI === 'function') updateCartUI();
+  showToast('Cupón ' + coupon.code + ' aplicado a tu carrito 🌿');
+}
+function restoreWelcomeCoupon(){
+  if(appliedCoupon) return;
+  let code = ''; try{ code = localStorage.getItem('ac_welcome_code') || ''; }catch(e){}
+  if(!code) return;
+  const c = (config.coupons || []).find(x => x.code === code && x.active !== false);
+  if(c){ appliedCoupon = c; if(typeof renderAppliedCoupon === 'function') renderAppliedCoupon(); }
 }
 
 function closeWelcomePopup() {
